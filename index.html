@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Абонементы — Дашборд</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app" id="app" style="display:none">
+  <header>
+    <h1>📋 Абонементы</h1>
+    <button class="btn btn-ghost btn-sm" id="logoutBtn">Выйти</button>
+  </header>
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" data-tab="today">Сегодня</button>
+    <button class="nav-tab" data-tab="students">Ученики</button>
+    <button class="nav-tab" data-tab="groups">Группы</button>
+  </div>
+
+  <!-- TAB: Сегодня -->
+  <div class="main" id="tab-today">
+    <div id="todayHeader" class="today-header">
+      <div>
+        <div class="today-date" id="todayDate"></div>
+        <div class="today-day" id="todayDay"></div>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">Занятия сегодня</span>
+    </div>
+    <div id="todayGroups"></div>
+
+    <div class="section-header" style="margin-top:20px">
+      <span class="section-title">⚠️ Заканчиваются абонементы</span>
+    </div>
+    <div id="expiringList"></div>
+  </div>
+
+  <!-- TAB: Ученики -->
+  <div class="main" id="tab-students" style="display:none">
+    <div class="section-header">
+      <span class="section-title">Все ученики</span>
+      <button class="btn btn-primary btn-sm" id="addStudentBtn">+ Добавить</button>
+    </div>
+    <div id="studentsList"></div>
+  </div>
+
+  <!-- TAB: Группы -->
+  <div class="main" id="tab-groups" style="display:none">
+    <div class="section-header">
+      <span class="section-title">Группы</span>
+      <button class="btn btn-primary btn-sm" id="addGroupBtn">+ Добавить</button>
+    </div>
+    <div id="groupsList"></div>
+  </div>
+</div>
+
+<!-- Modal: добавить ученика -->
+<div class="modal-overlay" id="studentModal">
+  <div class="modal">
+    <div class="modal-title" id="studentModalTitle">Новый ученик</div>
+    <div class="form-group">
+      <label class="form-label">Имя ученика *</label>
+      <input class="form-input" id="sName" placeholder="Иванова Мария">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Имя родителя</label>
+        <input class="form-input" id="sParentName" placeholder="Ирина">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Телефон родителя</label>
+        <input class="form-input" id="sParentPhone" placeholder="+79001234567" type="tel">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Группа</label>
+      <select class="form-select" id="sGroupId">
+        <option value="">— Без группы —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Заметка</label>
+      <textarea class="form-textarea" id="sNote" placeholder="Дополнительная информация..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="studentModalCancel">Отмена</button>
+      <button class="btn btn-primary" id="studentModalSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: добавить группу -->
+<div class="modal-overlay" id="groupModal">
+  <div class="modal">
+    <div class="modal-title" id="groupModalTitle">Новая группа</div>
+    <div class="form-group">
+      <label class="form-label">Название группы *</label>
+      <input class="form-input" id="gName" placeholder="Младшая группа">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Дни занятий</label>
+      <div class="day-chips" id="gDayChips"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Время</label>
+      <input class="form-input" id="gTime" placeholder="17:00" type="time">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="groupModalCancel">Отмена</button>
+      <button class="btn btn-primary" id="groupModalSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/dashboard.js"></script>
+</body>
+</html>
