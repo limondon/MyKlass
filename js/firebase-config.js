@@ -12,6 +12,13 @@ const firebaseConfig = {
   appId: "ТВОЙ_APP_ID"
 };
 
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
-export const auth = getAuth(app);
+export const IS_DEMO = firebaseConfig.apiKey === "ТВОЙ_API_KEY";
+
+export let db = null;
+export let auth = null;
+
+if (!IS_DEMO) {
+  const app = initializeApp(firebaseConfig);
+  db = getFirestore(app);
+  auth = getAuth(app);
+}
