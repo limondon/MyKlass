@@ -2682,7 +2682,7 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
         <div className="k">Кто</div>
         <div className="v">
           <div style={{fontWeight: 600}}>{name}</div>
-          {entity && lesson.group && <div style={{fontSize: 12, color: 'var(--ink-faint)'}}>{entity.studentIds.length} учеников · {entity.room}</div>}
+          {entity && lesson.group && <div style={{fontSize: 12, color: 'var(--ink-faint)'}}>{students.filter(s => s.groupId === entity.id).length} учеников · {entity.room}</div>}
           {entity && !lesson.group && <div style={{fontSize: 12, color: 'var(--ink-faint)'}}>{entity.age} лет · {entity.group}</div>}
         </div>
       </div>
@@ -2993,7 +2993,7 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
   const [room, setRoom] = React.useState(group?.room || 'Кабинет А');
 
   if (mode === 'detail' && group) {
-    const roster = group.studentIds.map(id => students.find(s => s.id === id)).filter(Boolean);
+    const roster = students.filter(s => s.groupId === group.id);
     return (
       <Sheet
         eyebrow={`${group.tag} · ${group.age}`}
@@ -4560,7 +4560,7 @@ const Groups = () => {
 
       <div className="groups-grid">
         {groups.map(g => {
-          const roster = g.studentIds.map(id => students.find(s => s.id === id)).filter(Boolean);
+          const roster = students.filter(s => s.groupId === g.id);
           const shown = roster.slice(0, 4);
           const rest = roster.length - shown.length;
           return (
