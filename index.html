@@ -1825,6 +1825,20 @@ window.MK_DATA = {
   subjects: ['Чтение','Математика','Письмо','Логика','Окружающий мир','Английский','Развитие речи'],
   get students() { return window.MK_STORE.students; },
   get groups() { return window.MK_STORE.groups; },
+  attendance: {
+    's1':  ['P','P','-','P','A','P','P','-','P','P','L','P','-','P'],
+    's2':  ['P','L','P','P','-','P','P','P','-','A','P','P','P','-'],
+    's3':  ['-','P','P','A','P','P','-','P','P','P','-','P','P','P'],
+    's4':  ['P','P','P','-','P','P','P','A','-','P','P','P','-','P'],
+    's5':  ['A','P','P','P','-','L','P','P','P','-','P','P','P','P'],
+    's6':  ['P','P','-','P','P','P','A','-','P','P','P','L','P','-'],
+    's7':  ['P','-','P','P','P','P','-','P','P','A','P','-','P','P'],
+    's8':  ['-','P','L','P','P','-','P','P','P','P','-','A','P','P'],
+    's9':  ['P','P','P','-','P','A','P','P','-','P','P','P','P','-'],
+    's10': ['P','A','-','P','P','P','P','-','P','L','P','P','-','P'],
+    's11': ['L','P','P','P','-','P','P','P','A','-','P','P','P','P'],
+    's12': ['P','P','P','A','-','P','-','P','P','P','P','-','L','P'],
+  },
   week: [
     {day:0,start:9,end:10,studentId:'s1',subject:'Чтение',tone:'green'},
     {day:0,start:10,end:11,studentId:'s2',subject:'Логика',tone:'ochre'},
@@ -4339,7 +4353,7 @@ const Attendance = () => {
   const { students, attendance } = window.MK_DATA;
   const { notify } = useApp();
   const [period, setPeriod] = React.useState('2w'); // '2w' | 'month' | 'sem'
-  const [marks, setMarks] = React.useState(attendance);
+  const [marks, setMarks] = React.useState(attendance || {});
   const [editing, setEditing] = React.useState(null); // {sid, i}
 
   const ranges = {
