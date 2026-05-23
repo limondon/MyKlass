@@ -4139,10 +4139,17 @@ const Schedule = ({ goTo }) => {
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [filter, setFilter] = React.useState({ subjects: [], groups: [], showCanceled: true });
   const days = ['ПН','ВТ','СР','ЧТ','ПТ','СБ'];
-  const baseDay = 19;
-  const dayBase = baseDay + weekOffset * 7;
-  const nums = days.map((_, i) => String(dayBase + i).padStart(2, '0'));
-  const todayIdx = weekOffset === 0 ? 2 : -1;
+  const _now = new Date();
+  const _mon0 = new Date(_now); _mon0.setDate(_now.getDate() - ((_now.getDay()+6)%7));
+  const _mon = new Date(_mon0); _mon.setDate(_mon0.getDate() + weekOffset * 7);
+  const _wdays = Array.from({length:6}, (_, i) => { const d = new Date(_mon); d.setDate(_mon.getDate()+i); return d; });
+  const nums = _wdays.map(d => String(d.getDate()).padStart(2,'0'));
+  const todayIdx = weekOffset === 0 ? Math.min((_now.getDay()+6)%7, 5) : -1;
+  const _mru = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const _weekLabel = _wdays[0].getMonth()===_wdays[5].getMonth()
+    ? `${_wdays[0].getDate()} – ${_wdays[5].getDate()} ${_mru[_wdays[5].getMonth()]}`
+    : `${_wdays[0].getDate()} ${_mru[_wdays[0].getMonth()]} – ${_wdays[5].getDate()} ${_mru[_wdays[5].getMonth()]}`;
+  const _wnum = (() => { const d=new Date(Date.UTC(_mon.getFullYear(),_mon.getMonth(),_mon.getDate())); const dn=d.getUTCDay()||7; d.setUTCDate(d.getUTCDate()+4-dn); const y=new Date(Date.UTC(d.getUTCFullYear(),0,1)); return Math.ceil((((d-y)/86400000)+1)/7); })();
   const startHour = 9;
   const endHour = 20;
   const slotHeight = 64; // px per hour
@@ -4193,9 +4200,9 @@ const Schedule = ({ goTo }) => {
         <div style={{display:'flex', alignItems:'center', gap:10}}>
           <button className="icon-btn" onClick={() => setWeekOffset(w => w - 1)} aria-label="Предыдущая неделя"><Icon name="chevronL" size={14}/></button>
           <div className="font-serif italic" style={{fontSize:22, cursor:'pointer'}} onClick={() => setWeekOffset(0)} title="Сегодня">
-            {dayBase} – {dayBase + 6} мая
+            {_weekLabel}
             <span style={{color:'var(--ink-faint)', fontStyle:'normal', fontFamily:'JetBrains Mono', fontSize:11, letterSpacing:'.12em'}}>
-              {' '}· {21 + weekOffset} НЕДЕЛЯ
+              {' '}· {_wnum} НЕДЕЛЯ
             </span>
           </div>
           <button className="icon-btn" onClick={() => setWeekOffset(w => w + 1)} aria-label="Следующая неделя"><Icon name="chevron" size={14}/></button>
