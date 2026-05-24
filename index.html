@@ -850,7 +850,7 @@ body {
   text-align: center;
   padding: 14px 4px 10px;
 }
-.att-grid > .att-h.name { text-align: left; padding-left: 22px; }
+.att-grid > .att-h.name { text-align: center; padding-left: 0; padding-right: 0; }
 .att-grid > .att-h .wd { display: block; opacity: 0.6; font-size: 9px; }
 .att-grid > .att-name {
   display: flex; align-items: center; gap: 10px;
@@ -886,11 +886,11 @@ body {
 .att-mark.makeup { background: var(--sky); color: var(--ink); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
 .att-mark.skip { background: transparent; border: 1px dashed var(--rule); color: var(--ink-faint); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
 .att-grid > .att-rate {
-  text-align: right;
-  padding-right: 22px;
+  text-align: center;
+  padding-left: 0; padding-right: 0;
   font-family: 'JetBrains Mono', monospace;
   font-size: 12.5px;
-  display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 .att-rate .ring {
   width: 28px; height: 28px;
@@ -4743,29 +4743,65 @@ const Attendance = () => {
   }, [marks]);
   const [editing, setEditing] = React.useState(null); // {sid, i}
 
-  const ranges = {
-    '2w':    { days: ['8','9','10','11','12','13','14','15','16','17','18','19','20','21'],
-               wd:   ['чт','пт','сб','вс','пн','вт','ср','чт','пт','сб','вс','пн','вт','ср'],
-               label: '8 – 21 МАЯ 2026' },
-    'month': { days: Array.from({length:21}, (_,i) => String(i+1)),
-               wd:   Array.from({length:21}, (_,i) => ['пн','вт','ср','чт','пт','сб','вс'][(i+3)%7]),
-               label: '1 – 21 МАЯ 2026' },
-    'sem':   { days: ['ян','фе','ма','ап','мая'],
-               wd:   ['','','','',''],
-               label: 'ЯНВ – МАЙ 2026' },
-  };
+  const _attNow = new Date();
+  const _wdsRu = ['вс','пн','вт','ср','чт','пт','сб'];
+  const _mruShort = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const _mruShortCap = _mruShort.map(m => m.toUpperCase());
+
+  const ranges = (() => {
+    // 2 недели — 14 дней, заканчиваются сегодня
+    const _2wDays = [], _2wWd = [];
+    const end2w = new Date(_attNow);
+    const start2w = new Date(end2w); start2w.setDate(end2w.getDate() - 13);
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(start2w); d.setDate(start2w.getDate() + i);
+      _2wDays.push(String(d.getDate()));
+      _2wWd.push(_wdsRu[d.getDay()]);
+    }
+    const _2wLabel = start2w.getMonth() === end2w.getMonth()
+      ? `${start2w.getDate()} – ${end2w.getDate()} ${_mruShortCap[end2w.getMonth()]} ${end2w.getFullYear()}`
+      : `${start2w.getDate()} ${_mruShortCap[start2w.getMonth()]} – ${end2w.getDate()} ${_mruShortCap[end2w.getMonth()]} ${end2w.getFullYear()}`;
+
+    // Месяц — весь текущий месяц
+    const monthN = _attNow.getMonth();
+    const yearN = _attNow.getFullYear();
+    const daysInMonth = new Date(yearN, monthN + 1, 0).getDate();
+    const _mDays = [], _mWd = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      _mDays.push(String(i));
+      _mWd.push(_wdsRu[new Date(yearN, monthN, i).getDay()]);
+    }
+
+    // Семестр — текущий + 4 предыдущих месяца
+    const _sDays = [], _sWd = [];
+    for (let i = 4; i >= 0; i--) {
+      const d = new Date(yearN, monthN - i, 1);
+      _sDays.push(_mruShort[d.getMonth()]);
+      _sWd.push('');
+    }
+    const semStart = new Date(yearN, monthN - 4, 1);
+    const _sLabel = `${_mruShortCap[semStart.getMonth()]} – ${_mruShortCap[monthN]} ${yearN}`;
+
+    return {
+      '2w':    { days: _2wDays, wd: _2wWd, label: _2wLabel },
+      'month': { days: _mDays,  wd: _mWd,  label: `1 – ${daysInMonth} ${_mruShortCap[monthN]} ${yearN}` },
+      'sem':   { days: _sDays,  wd: _sWd,  label: _sLabel },
+    };
+  })();
   const cfg = ranges[period];
 
   const adapt = (m) => {
-    if (period === '2w') return m;
+    if (period === '2w') return m.slice(-14);
     if (period === 'month') {
-      // synthesize — reuse last 14 plus pad with mix
-      const base = m.slice(0, 14);
-      const pad = Array.from({length: 7}, (_, i) => ['P','P','-','P','L','-','P'][i]);
+      // синтез — реальных данных пока нет на каждый день месяца
+      const base = (m || []).slice(0, 14);
+      const padN = Math.max(0, cfg.days.length - base.length);
+      const padPattern = ['P','P','-','P','L','-','P'];
+      const pad = Array.from({length: padN}, (_, i) => padPattern[i % padPattern.length]);
       return [...pad, ...base];
     }
-    // semester aggregate per month — just show a % per month as a single mark
-    return m.slice(0, 5);
+    // семестр — заглушка
+    return Array.from({length: cfg.days.length}, (_, i) => ['P','P','L','P','P'][i % 5]);
   };
 
   const calcRate = (marks) => {
