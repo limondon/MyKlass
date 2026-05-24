@@ -4185,9 +4185,11 @@ const Schedule = ({ goTo }) => {
     return true;
   };
 
-  // Now line at 12:00 today (Wed)
-  const nowHour = 12;
-  const nowTop = 12 + (nowHour - startHour) * slotHeight; // header offset
+  // Now line — настоящее текущее время
+  const nowHour = _now.getHours() + _now.getMinutes() / 60;
+  const nowVisible = nowHour >= startHour && nowHour <= endHour;
+  const nowLabel = `${String(_now.getHours()).padStart(2,'0')}:${String(_now.getMinutes()).padStart(2,'0')}`;
+  const todayDayIdx = (_now.getDay() + 6) % 7; // 0=Пн … 6=Вс
 
   return (
     <div className="content">
@@ -4261,15 +4263,16 @@ const Schedule = ({ goTo }) => {
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-tag">среда · 21 мая · 6 уроков</div>
+              <div className="card-tag">{['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'][todayDayIdx]} · {_now.getDate()} {_mru[_now.getMonth()]} · {weekData.filter(b => b.day === todayDayIdx && passFilter(b)).length} уроков</div>
               <div className="card-title">День <em>в работе</em></div>
             </div>
           </div>
           <div className="today-list">
-            {weekData.filter(b => b.day === 2 && passFilter(b)).map((b, i) => {
+            {weekData.filter(b => b.day === todayDayIdx && passFilter(b)).map((b, i) => {
               const block = blockFor(b);
+              const _dayCap = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'][todayDayIdx];
               return (
-                <div key={i} className="lesson-row" onClick={() => openSheet('lesson', { lesson: { ...b, dayName: 'Среда 21 мая' } })}>
+                <div key={i} className="lesson-row" onClick={() => openSheet('lesson', { lesson: { ...b, dayName: `${_dayCap} ${_now.getDate()} ${_mru[_now.getMonth()]}` } })}>
                   <div className="lesson-time">{block.timeLabel.split('–')[0]}<span className="dur">{Math.round((b.end - b.start) * 60)} МИН</span></div>
                   <div>
                     <div className="lesson-meta-line">
@@ -4329,8 +4332,8 @@ const Schedule = ({ goTo }) => {
             </div>
           ))}
 
-          {weekOffset === 0 && <div className="sched-now" style={{ top: (nowHour - startHour) * slotHeight }}>
-            <span className="sched-now-label">сейчас 12:00</span>
+          {weekOffset === 0 && nowVisible && <div className="sched-now" style={{ top: (nowHour - startHour) * slotHeight }}>
+            <span className="sched-now-label">сейчас {nowLabel}</span>
           </div>}
         </div>
       </div>
@@ -4356,11 +4359,18 @@ window.Schedule = Schedule;
 <!-- screens/attendance.jsx -->
 <script type="text/babel" data-presets="react">
 // Attendance journal
+const MK_ATT_KEY = 'mk.attendance';
 const Attendance = () => {
   const { students, attendance } = window.MK_DATA;
   const { notify } = useApp();
   const [period, setPeriod] = React.useState('2w'); // '2w' | 'month' | 'sem'
-  const [marks, setMarks] = React.useState(attendance || {});
+  const [marks, setMarks] = React.useState(() => {
+    try { const saved = JSON.parse(localStorage.getItem(MK_ATT_KEY) || 'null'); if (saved) return saved; } catch {}
+    return attendance || {};
+  });
+  React.useEffect(() => {
+    try { localStorage.setItem(MK_ATT_KEY, JSON.stringify(marks)); } catch {}
+  }, [marks]);
   const [editing, setEditing] = React.useState(null); // {sid, i}
 
   const ranges = {
@@ -4782,6 +4792,30 @@ const ACCENTS = {
   ink:      { name:'Чернила', forest:'oklch(0.28 0.04 250)', deep:'oklch(0.22 0.035 250)', soft:'oklch(0.5 0.05 250)',  moss:'oklch(0.78 0.06 245)', mossPale:'oklch(0.93 0.03 245)' },
 };
 
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err, info) { console.error('[ErrorBoundary]', err, info); }
+  reset = () => this.setState({ err: null });
+  render() {
+    if (this.state.err) {
+      return (
+        <div className="content">
+          <div className="card" style={{padding: 32, textAlign: 'center'}}>
+            <div className="card-tag" style={{color: 'var(--berry)', marginBottom: 8}}>что-то сломалось</div>
+            <div className="font-serif italic" style={{fontSize: 28, marginBottom: 14}}>Этот экран <em>не загрузился</em></div>
+            <div style={{fontFamily: 'JetBrains Mono', fontSize: 11, color: 'var(--ink-faint)', marginBottom: 18, wordBreak: 'break-word'}}>
+              {String(this.state.err.message || this.state.err)}
+            </div>
+            <button className="btn btn-sm" onClick={this.reset}>Попробовать снова</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const App = () => {
   const [route, setRoute] = useState('dashboard');
   const [selectedStudent, setSelectedStudent] = useState('s1');
@@ -4817,12 +4851,26 @@ const App = () => {
     document.body.classList.toggle('no-stamps', !t.showStamps);
   }, [t.showStamps]);
 
+  const _t = window.MK_DATA.today;
+  const _allStudents = window.MK_STORE.students;
+  const _allGroups = window.MK_STORE.groups;
+  const _activeStudents = _allStudents.filter(s => s.status === 'active').length;
+  const _wdCap = _t.weekday;
+  const _wkNum = (() => { const d=new Date(); const u=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const dn=u.getUTCDay()||7; u.setUTCDate(u.getUTCDate()+4-dn); const y=new Date(Date.UTC(u.getUTCFullYear(),0,1)); return Math.ceil((((u-y)/86400000)+1)/7); })();
+  const _attEnd = new Date(); const _attStart = new Date(_attEnd); _attStart.setDate(_attEnd.getDate()-13);
+  const _mru = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const _attLabel = _attStart.getMonth()===_attEnd.getMonth()
+    ? `${_attStart.getDate()} – ${_attEnd.getDate()} ${_mru[_attEnd.getMonth()]} ${_attEnd.getFullYear()}`
+    : `${_attStart.getDate()} ${_mru[_attStart.getMonth()]} – ${_attEnd.getDate()} ${_mru[_attEnd.getMonth()]} ${_attEnd.getFullYear()}`;
+  const _grpSizes = _allGroups.map(g => _allStudents.filter(s => s.groupId === g.id).length);
+  const _grpMin = _grpSizes.length ? Math.min(..._grpSizes) : 0;
+  const _grpMax = _grpSizes.length ? Math.max(..._grpSizes) : 0;
   const titles = {
-    dashboard:  { eyebrow: 'Среда · 21 мая 2026',          h1: ['Здравствуйте,', 'Анна Сергеевна'] },
-    students:   { eyebrow: '12 учеников · 6 групп',         h1: ['Мой', 'класс'] },
-    schedule:   { eyebrow: 'Неделя 21 · май 2026',          h1: ['Учительский', 'ежедневник'] },
-    attendance: { eyebrow: 'Период · 8 – 21 мая 2026',      h1: ['Журнал', 'посещаемости'] },
-    groups:     { eyebrow: '6 групп · от 1 до 4 человек',   h1: ['Учебные', 'группы'] },
+    dashboard:  { eyebrow: `${_wdCap} · ${_t.date} ${_t.month} ${_t.year}`, h1: ['Здравствуйте,', 'Анна Сергеевна'] },
+    students:   { eyebrow: `${_allStudents.length} учеников · ${_allGroups.length} групп`, h1: ['Мой', 'класс'] },
+    schedule:   { eyebrow: `Неделя ${_wkNum} · ${_t.month} ${_t.year}`,    h1: ['Учительский', 'ежедневник'] },
+    attendance: { eyebrow: `Период · ${_attLabel}`,                         h1: ['Журнал', 'посещаемости'] },
+    groups:     { eyebrow: `${_allGroups.length} групп · от ${_grpMin} до ${_grpMax} человек`, h1: ['Учебные', 'группы'] },
   };
 
   const top = titles[route] || titles.dashboard;
@@ -4936,11 +4984,13 @@ const App = () => {
             </div>
           </div>
 
-          <Screen
-            goTo={setRoute}
-            selectedId={selectedStudent}
-            setSelectedId={setSelectedStudent}
-          />
+          <ErrorBoundary key={route}>
+            <Screen
+              goTo={setRoute}
+              selectedId={selectedStudent}
+              setSelectedId={setSelectedStudent}
+            />
+          </ErrorBoundary>
         </main>
 
         <TweaksPanel title="Tweaks">
