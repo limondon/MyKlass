@@ -4944,9 +4944,18 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+const VALID_ROUTES = ['dashboard', 'students', 'schedule', 'attendance', 'groups'];
+const _readHash = () => {
+  const parts = (window.location.hash || '').replace(/^#\/?/, '').split('/');
+  const r = VALID_ROUTES.includes(parts[0]) ? parts[0] : 'dashboard';
+  const sel = parts[1] || null;
+  return { route: r, selected: sel };
+};
+
 const App = () => {
-  const [route, setRoute] = useState('dashboard');
-  const [selectedStudent, setSelectedStudent] = useState('s1');
+  const _initial = _readHash();
+  const [route, setRoute] = useState(_initial.route);
+  const [selectedStudent, setSelectedStudent] = useState(_initial.selected || 's1');
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [toasts, setToasts] = useState([]);
   const [sheet, setSheet] = useState(null);   // { kind, props }
@@ -4955,6 +4964,28 @@ const App = () => {
     const u1 = window.MK_STORE.subscribe(_rerender);
     const u2 = window.MK_SCHEDULE.subscribe(_rerender);
     return () => { u1(); u2(); };
+  }, []);
+
+  // route/selected → URL hash
+  useEffect(() => {
+    const target = route === 'students' && selectedStudent
+      ? `${route}/${selectedStudent}`
+      : route;
+    if ((window.location.hash || '').replace(/^#\/?/, '') !== target) {
+      // replaceState чтобы не плодить лишние записи в истории на каждый клик
+      history.replaceState(null, '', `#${target}`);
+    }
+  }, [route, selectedStudent]);
+
+  // URL hash → route/selected (кнопки «назад»/«вперёд» в браузере)
+  useEffect(() => {
+    const onHash = () => {
+      const h = _readHash();
+      setRoute(h.route);
+      if (h.selected) setSelectedStudent(h.selected);
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
   const notify = React.useCallback((msg, tone = 'ok') => {
