@@ -2927,28 +2927,72 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
     ? students.filter(s => s.groupId === lesson.groupId)
     : (entity ? [entity] : []);
 
+  // Reschedule state
+  const [reschedMode, setReschedMode] = React.useState(false);
+  const [newDate, setNewDate] = React.useState(lesson.date || window.MK_SCHEDULE.fmtDate(new Date()));
+  const [newTime, setNewTime] = React.useState(fmt(lesson.start));
+  const [newDur, setNewDur] = React.useState(String(Math.round((lesson.end - lesson.start) * 60)));
+
+  const canReschedule = !!(lesson.date && lesson.id) && !isCancelled;
+
+  const applyReschedule = () => {
+    const [h, m] = newTime.split(':').map(Number);
+    const startH = h + m/60;
+    const endH = startH + (parseInt(newDur, 10) || 60) / 60;
+    // 1) Удаляем оригинал с этой даты
+    const isExtra = String(lesson.id).startsWith('e_');
+    if (isExtra) {
+      window.MK_SCHEDULE.removeExtra(lesson.date, lesson.id);
+    } else if (!window.MK_SCHEDULE.isCancelled(lesson.date, lesson.id)) {
+      window.MK_SCHEDULE.toggleCancel(lesson.date, lesson.id);
+    }
+    // 2) Создаём новый extra на target дату
+    const { id: _id, date: _d, canceled: _c, day: _day, dayName: _dn, ...base } = lesson;
+    const dayMapJs = (d) => { const u = new Date(d + 'T00:00:00'); return (u.getDay() + 6) % 7; };
+    const newLesson = {
+      ...base,
+      start: startH, end: endH,
+      day: dayMapJs(newDate),
+      note: `перенос с ${lesson.date} ${fmt(lesson.start)}`,
+    };
+    window.MK_SCHEDULE.addExtra(newDate, newLesson);
+    notify(`Перенесено на ${newDate.split('-').reverse().join('.')} в ${newTime}`);
+    onClose();
+  };
+
   return (
     <Sheet
       eyebrow={`${lesson.dayName || ''} · ${fmt(lesson.start)} – ${fmt(lesson.end)}`}
       title={lesson.subject}
       titleEm=""
       onClose={onClose}
-      foot={<>
-        <button className="btn btn-sm" onClick={() => {
-          if (canToggle) {
-            window.MK_SCHEDULE.toggleCancel(lesson.date, lesson.id);
-            notify(isCancelled ? 'Урок восстановлен' : 'Урок отменён на эту дату', 'ok');
-          } else {
-            notify('Урок отменён', 'ok');
-          }
-          onClose();
-        }}>{isCancelled ? 'Восстановить' : 'Отменить'}</button>
-        <span className="grow"></span>
-        <button className="btn btn-sm" onClick={() => { onClose(); notify('Перенос предложен', 'ok'); }}>Перенести</button>
-        <button className="btn btn-sm btn-primary" onClick={() => { onClose(); notify('Урок отмечен как проведённый', 'ok'); }}>
-          <Icon name="check" size={13}/> Провести
-        </button>
-      </>}
+      foot={reschedMode ? (
+        <>
+          <button className="btn btn-sm" onClick={() => setReschedMode(false)}>Отмена</button>
+          <span className="grow"></span>
+          <button className="btn btn-sm btn-primary" onClick={applyReschedule}>
+            <Icon name="check" size={13}/> Перенести
+          </button>
+        </>
+      ) : (
+        <>
+          <button className="btn btn-sm" onClick={() => {
+            if (canToggle) {
+              window.MK_SCHEDULE.toggleCancel(lesson.date, lesson.id);
+              notify(isCancelled ? 'Урок восстановлен' : 'Урок отменён на эту дату', 'ok');
+            } else {
+              notify('Урок отменён', 'ok');
+            }
+            onClose();
+          }}>{isCancelled ? 'Восстановить' : 'Отменить'}</button>
+          <span className="grow"></span>
+          {canReschedule && (
+            <button className="btn btn-sm" onClick={() => setReschedMode(true)}>
+              <Icon name="arrow" size={13}/> Перенести
+            </button>
+          )}
+        </>
+      )}
     >
       <div className="kv-row">
         <div className="k">Кто</div>
@@ -2972,7 +3016,42 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
           {isCancelled ? <Pill tone="berry" dot>отменён</Pill> : <Pill tone="green" dot>в плане</Pill>}
         </div>
       </div>
-      {!isCancelled && roster.length > 0 && (
+
+      {reschedMode && (
+        <div style={{
+          marginTop:18, padding:'16px 18px', border:'1px solid var(--forest)', borderRadius:12,
+          background:'var(--moss-pale)',
+        }}>
+          <div style={{
+            fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', textTransform:'uppercase',
+            color:'var(--ink-faint)', marginBottom:10,
+          }}>Перенос занятия</div>
+          <div className="fld-row">
+            <div className="fld" style={{marginBottom:10}}>
+              <label>Новая дата</label>
+              <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+            </div>
+            <div className="fld" style={{marginBottom:10}}>
+              <label>Новое время</label>
+              <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)} />
+            </div>
+          </div>
+          <div className="fld" style={{marginBottom:0}}>
+            <label>Длительность</label>
+            <div className="choices">
+              {['30','45','60','90'].map(d => (
+                <button key={d} className={`choice ${newDur === d ? 'on' : ''}`} onClick={() => setNewDur(d)}>{d} мин</button>
+              ))}
+            </div>
+          </div>
+          <div style={{fontSize:11.5, color:'var(--ink-soft)', marginTop:12, fontStyle:'italic'}}>
+            Урок на {lesson.date && lesson.date.split('-').reverse().join('.')} будет отменён,
+            а на новой дате появится экземпляр с пометкой «перенос».
+          </div>
+        </div>
+      )}
+
+      {!reschedMode && !isCancelled && roster.length > 0 && (
         <LessonRoster rosterStudents={roster} notify={notify} />
       )}
     </Sheet>
