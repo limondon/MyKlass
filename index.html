@@ -1845,32 +1845,33 @@ window.MK_DATA = {
     's11': ['L','P','P','P','-','P','P','P','A','-','P','P','P','P'],
     's12': ['P','P','P','A','-','P','-','P','P','P','P','-','L','P'],
   },
+  // Шаблон еженедельного расписания. ID нужны чтобы отменять/менять конкретные экземпляры через MK_SCHEDULE.overrides
   week: [
-    {day:0,start:9,end:10,studentId:'s1',subject:'Чтение',tone:'green'},
-    {day:0,start:10,end:11,studentId:'s2',subject:'Логика',tone:'ochre'},
-    {day:0,start:11.5,end:12.5,studentId:'s5',subject:'Письмо',tone:'sky'},
-    {day:0,start:16,end:17,groupId:'g3',subject:'Чтение по слогам',tone:'green',group:true},
-    {day:0,start:18,end:19,studentId:'s11',subject:'Развитие речи',tone:'violet'},
-    {day:1,start:10,end:11,studentId:'s6',subject:'Математика',tone:'ochre'},
-    {day:1,start:14,end:15.5,groupId:'g2',subject:'Подготовка',tone:'green',group:true},
-    {day:1,start:16,end:17,studentId:'s3',subject:'Окруж. мир',tone:'sky'},
-    {day:1,start:17.5,end:18.5,studentId:'s9',subject:'Чтение',tone:'green'},
-    {day:2,start:9,end:10,studentId:'s11',subject:'Письмо',tone:'sky'},
-    {day:2,start:10,end:11,studentId:'s7',subject:'Английский',tone:'violet'},
-    {day:2,start:11.5,end:12.5,studentId:'s12',subject:'Логика',tone:'ochre'},
-    {day:2,start:16,end:17,groupId:'g3',subject:'Чтение по слогам',tone:'green',group:true},
-    {day:2,start:18,end:19,studentId:'s8',subject:'Математика',tone:'ochre',canceled:true},
-    {day:3,start:9.5,end:10.5,studentId:'s10',subject:'Математика',tone:'ochre'},
-    {day:3,start:11,end:12,studentId:'s4',subject:'Письмо',tone:'sky'},
-    {day:3,start:14,end:15.5,groupId:'g2',subject:'Чтение',tone:'green',group:true},
-    {day:3,start:17,end:18,groupId:'g6',subject:'Английский',tone:'violet',group:true},
-    {day:4,start:9,end:10,studentId:'s1',subject:'Чтение',tone:'green'},
-    {day:4,start:10.5,end:11.5,studentId:'s5',subject:'Логика',tone:'ochre'},
-    {day:4,start:12,end:13,studentId:'s2',subject:'Окруж. мир',tone:'sky'},
-    {day:4,start:15,end:16,studentId:'s6',subject:'Математика',tone:'ochre'},
-    {day:4,start:17,end:18,studentId:'s12',subject:'Чтение',tone:'green'},
-    {day:5,start:11,end:12.5,groupId:'g4',subject:'Считалочки',tone:'berry',group:true},
-    {day:5,start:13,end:14,studentId:'s8',subject:'Письмо',tone:'sky'},
+    {id:'t01',day:0,start:9,end:10,studentId:'s1',subject:'Чтение',tone:'green'},
+    {id:'t02',day:0,start:10,end:11,studentId:'s2',subject:'Логика',tone:'ochre'},
+    {id:'t03',day:0,start:11.5,end:12.5,studentId:'s5',subject:'Письмо',tone:'sky'},
+    {id:'t04',day:0,start:16,end:17,groupId:'g3',subject:'Чтение по слогам',tone:'green',group:true},
+    {id:'t05',day:0,start:18,end:19,studentId:'s11',subject:'Развитие речи',tone:'violet'},
+    {id:'t06',day:1,start:10,end:11,studentId:'s6',subject:'Математика',tone:'ochre'},
+    {id:'t07',day:1,start:14,end:15.5,groupId:'g2',subject:'Подготовка',tone:'green',group:true},
+    {id:'t08',day:1,start:16,end:17,studentId:'s3',subject:'Окруж. мир',tone:'sky'},
+    {id:'t09',day:1,start:17.5,end:18.5,studentId:'s9',subject:'Чтение',tone:'green'},
+    {id:'t10',day:2,start:9,end:10,studentId:'s11',subject:'Письмо',tone:'sky'},
+    {id:'t11',day:2,start:10,end:11,studentId:'s7',subject:'Английский',tone:'violet'},
+    {id:'t12',day:2,start:11.5,end:12.5,studentId:'s12',subject:'Логика',tone:'ochre'},
+    {id:'t13',day:2,start:16,end:17,groupId:'g3',subject:'Чтение по слогам',tone:'green',group:true},
+    {id:'t14',day:2,start:18,end:19,studentId:'s8',subject:'Математика',tone:'ochre'},
+    {id:'t15',day:3,start:9.5,end:10.5,studentId:'s10',subject:'Математика',tone:'ochre'},
+    {id:'t16',day:3,start:11,end:12,studentId:'s4',subject:'Письмо',tone:'sky'},
+    {id:'t17',day:3,start:14,end:15.5,groupId:'g2',subject:'Чтение',tone:'green',group:true},
+    {id:'t18',day:3,start:17,end:18,groupId:'g6',subject:'Английский',tone:'violet',group:true},
+    {id:'t19',day:4,start:9,end:10,studentId:'s1',subject:'Чтение',tone:'green'},
+    {id:'t20',day:4,start:10.5,end:11.5,studentId:'s5',subject:'Логика',tone:'ochre'},
+    {id:'t21',day:4,start:12,end:13,studentId:'s2',subject:'Окруж. мир',tone:'sky'},
+    {id:'t22',day:4,start:15,end:16,studentId:'s6',subject:'Математика',tone:'ochre'},
+    {id:'t23',day:4,start:17,end:18,studentId:'s12',subject:'Чтение',tone:'green'},
+    {id:'t24',day:5,start:11,end:12.5,groupId:'g4',subject:'Считалочки',tone:'berry',group:true},
+    {id:'t25',day:5,start:13,end:14,studentId:'s8',subject:'Письмо',tone:'sky'},
   ],
   get today() {
     const now = new Date();
@@ -1898,6 +1899,69 @@ window.MK_DATA = {
   },
   alerts: [],
 };
+
+// ── Schedule overrides (per-date cancellations + extra lessons) ──
+const MK_OVR_KEY = 'mk.schedule.overrides';
+window.MK_SCHEDULE = (() => {
+  const _load = () => { try { return JSON.parse(localStorage.getItem(MK_OVR_KEY) || '{}') || {}; } catch { return {}; } };
+  const _save = (d) => { try { localStorage.setItem(MK_OVR_KEY, JSON.stringify(d)); } catch {} };
+  const _subs = new Set();
+  let _data = _load();
+
+  const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  return {
+    fmtDate,
+    get overrides() { return _data; },
+    subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
+
+    isCancelled(dateKey, lessonId) {
+      return (_data[dateKey]?.cancelled || []).includes(lessonId);
+    },
+
+    toggleCancel(dateKey, lessonId) {
+      const next = { ..._data };
+      const day = { ...(next[dateKey] || {}) };
+      const list = [...(day.cancelled || [])];
+      const i = list.indexOf(lessonId);
+      if (i >= 0) list.splice(i, 1); else list.push(lessonId);
+      day.cancelled = list;
+      if ((day.cancelled||[]).length === 0 && (day.extra||[]).length === 0) delete next[dateKey];
+      else next[dateKey] = day;
+      _data = next; _save(_data); _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } });
+    },
+
+    addExtra(dateKey, lesson) {
+      const next = { ..._data };
+      const day = { ...(next[dateKey] || {}) };
+      const extra = [...(day.extra || []), { ...lesson, id: lesson.id || `e_${Date.now()}_${Math.random().toString(36).slice(2,6)}` }];
+      day.extra = extra; next[dateKey] = day;
+      _data = next; _save(_data); _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } });
+    },
+
+    removeExtra(dateKey, lessonId) {
+      const next = { ..._data };
+      const day = { ...(next[dateKey] || {}) };
+      day.extra = (day.extra || []).filter(l => l.id !== lessonId);
+      if ((day.cancelled||[]).length === 0 && day.extra.length === 0) delete next[dateKey];
+      else next[dateKey] = day;
+      _data = next; _save(_data); _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } });
+    },
+
+    // Эффективные уроки на конкретную дату: шаблон по дню недели + extras − cancelled
+    lessonsForDate(date) {
+      const day = (date.getDay() + 6) % 7;
+      const key = fmtDate(date);
+      const ovr = _data[key] || {};
+      const cancelled = new Set(ovr.cancelled || []);
+      const fromTemplate = (window.MK_DATA.week || [])
+        .filter(t => t.day === day)
+        .map(t => ({ ...t, date: key, canceled: cancelled.has(t.id) }));
+      const extras = (ovr.extra || []).map(l => ({ ...l, date: key, day }));
+      return [...fromTemplate, ...extras].sort((a, b) => a.start - b.start);
+    },
+  };
+})();
 
 </script>
 
@@ -2668,6 +2732,8 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
     : students.find(s => s.id === lesson.studentId);
   const name = entity ? (lesson.group ? entity.name : entity.name) : 'Урок';
   const fmt = (h) => `${Math.floor(h).toString().padStart(2,'0')}:${((h%1)*60).toString().padStart(2,'0')}`;
+  const canToggle = lesson.date && lesson.id;
+  const isCancelled = canToggle ? window.MK_SCHEDULE.isCancelled(lesson.date, lesson.id) : !!lesson.canceled;
 
   return (
     <Sheet
@@ -2676,7 +2742,15 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
       titleEm=""
       onClose={onClose}
       foot={<>
-        <button className="btn btn-sm" onClick={() => { onClose(); notify('Урок отменён', 'ok'); }}>Отменить</button>
+        <button className="btn btn-sm" onClick={() => {
+          if (canToggle) {
+            window.MK_SCHEDULE.toggleCancel(lesson.date, lesson.id);
+            notify(isCancelled ? 'Урок восстановлен' : 'Урок отменён на эту дату', 'ok');
+          } else {
+            notify('Урок отменён', 'ok');
+          }
+          onClose();
+        }}>{isCancelled ? 'Восстановить' : 'Отменить'}</button>
         <span className="grow"></span>
         <button className="btn btn-sm" onClick={() => { onClose(); notify('Перенос предложен', 'ok'); }}>Перенести</button>
         <button className="btn btn-sm btn-primary" onClick={() => { onClose(); notify('Урок отмечен как проведённый', 'ok'); }}>
@@ -2703,7 +2777,7 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
       <div className="kv-row">
         <div className="k">Статус</div>
         <div className="v">
-          {lesson.canceled ? <Pill tone="berry" dot>отменён</Pill> : <Pill tone="green" dot>в плане</Pill>}
+          {isCancelled ? <Pill tone="berry" dot>отменён</Pill> : <Pill tone="green" dot>в плане</Pill>}
         </div>
       </div>
       <div className="kv-row">
@@ -3207,9 +3281,7 @@ const Dashboard = ({ goTo }) => {
   const _nowH = _now.getHours() + _now.getMinutes() / 60;
   const _groups = window.MK_STORE.groups;
   const _mruDash = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
-  const todaySchedule = week
-    .filter(b => b.day === _todayIdx)
-    .sort((a, b) => a.start - b.start)
+  const todaySchedule = window.MK_SCHEDULE.lessonsForDate(_now)
     .map(b => {
       let name, sub, topic = b.subject;
       if (b.group) {
@@ -4178,7 +4250,7 @@ window.StudentProfile = StudentProfile;
 <script type="text/babel" data-presets="react">
 // Schedule — weekly view
 const Schedule = ({ goTo }) => {
-  const { week: weekData, students, groups } = window.MK_DATA;
+  const { students, groups } = window.MK_DATA;
   const today = window.MK_DATA.today;
   const { openSheet, notify } = useApp();
   const [view, setView] = React.useState('week');     // 'day' | 'week' | 'month'
@@ -4305,20 +4377,24 @@ const Schedule = ({ goTo }) => {
         </div>
       )}
 
-      {view === 'day' && (
+      {view === 'day' && (() => {
+        const _dayCap = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'][todayDayIdx];
+        const _dayLow = ['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'][todayDayIdx];
+        const _dayLessons = window.MK_SCHEDULE.lessonsForDate(_now).filter(passFilter);
+        const _dayName = `${_dayCap} ${_now.getDate()} ${_mru[_now.getMonth()]}`;
+        return (
         <div className="card">
           <div className="card-head">
             <div>
-              <div className="card-tag">{['понедельник','вторник','среда','четверг','пятница','суббота','воскресенье'][todayDayIdx]} · {_now.getDate()} {_mru[_now.getMonth()]} · {weekData.filter(b => b.day === todayDayIdx && passFilter(b)).length} уроков</div>
+              <div className="card-tag">{_dayLow} · {_now.getDate()} {_mru[_now.getMonth()]} · {_dayLessons.length} уроков</div>
               <div className="card-title">День <em>в работе</em></div>
             </div>
           </div>
           <div className="today-list">
-            {weekData.filter(b => b.day === todayDayIdx && passFilter(b)).map((b, i) => {
+            {_dayLessons.map((b, i) => {
               const block = blockFor(b);
-              const _dayCap = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'][todayDayIdx];
               return (
-                <div key={i} className="lesson-row" onClick={() => openSheet('lesson', { lesson: { ...b, dayName: `${_dayCap} ${_now.getDate()} ${_mru[_now.getMonth()]}` } })}>
+                <div key={b.id || i} className="lesson-row" onClick={() => openSheet('lesson', { lesson: { ...b, dayName: _dayName } })}>
                   <div className="lesson-time">{block.timeLabel.split('–')[0]}<span className="dur">{Math.round((b.end - b.start) * 60)} МИН</span></div>
                   <div>
                     <div className="lesson-meta-line">
@@ -4335,7 +4411,8 @@ const Schedule = ({ goTo }) => {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {view === 'week' && (
       <div className="schedule-grid">
@@ -4355,19 +4432,23 @@ const Schedule = ({ goTo }) => {
               <div key={h} className="sched-time" style={{height: slotHeight}}>{h.toString().padStart(2,'0')}:00</div>
             ))}
           </div>
-          {days.map((_, dIdx) => (
+          {days.map((_, dIdx) => {
+            const _colDate = _wdays[dIdx];
+            const _colLessons = window.MK_SCHEDULE.lessonsForDate(_colDate).filter(passFilter);
+            const _colDayName = `${days[dIdx]} ${_colDate.getDate()} ${_mru[_colDate.getMonth()]}`;
+            return (
             <div key={dIdx} className="sched-col" style={{ height: (endHour - startHour) * slotHeight }}>
               {hours.map(h => (
                 <div key={h} className="hour-line" style={{ top: (h - startHour) * slotHeight }}></div>
               ))}
-              {weekData.filter(b => b.day === dIdx && passFilter(b)).map((b, i) => {
+              {_colLessons.map((b, i) => {
                 const block = blockFor(b);
                 return (
                   <div
-                    key={i}
+                    key={b.id || i}
                     className={`sched-block ${block.tone || ''} ${block.group ? 'group' : ''} ${b.canceled ? 'canceled' : ''}`}
                     style={{ top: block.top, height: block.height }}
-                    onClick={(e) => { e.stopPropagation(); openSheet('lesson', { lesson: { ...b, dayName: `${days[dIdx]} ${nums[dIdx]} мая` } }); }}
+                    onClick={(e) => { e.stopPropagation(); openSheet('lesson', { lesson: { ...b, dayName: _colDayName } }); }}
                   >
                     <div className="t">{block.timeLabel}</div>
                     <div className="n">{block.label}</div>
@@ -4376,7 +4457,8 @@ const Schedule = ({ goTo }) => {
                 );
               })}
             </div>
-          ))}
+            );
+          })}
 
           {weekOffset === 0 && nowVisible && <div className="sched-now" style={{ top: (nowHour - startHour) * slotHeight }}>
             <span className="sched-now-label">сейчас {nowLabel}</span>
@@ -4869,7 +4951,11 @@ const App = () => {
   const [toasts, setToasts] = useState([]);
   const [sheet, setSheet] = useState(null);   // { kind, props }
   const [, _rerender] = React.useReducer(x => x + 1, 0);
-  useEffect(() => window.MK_STORE.subscribe(_rerender), []);
+  useEffect(() => {
+    const u1 = window.MK_STORE.subscribe(_rerender);
+    const u2 = window.MK_SCHEDULE.subscribe(_rerender);
+    return () => { u1(); u2(); };
+  }, []);
 
   const notify = React.useCallback((msg, tone = 'ok') => {
     const id = Date.now() + Math.random();
