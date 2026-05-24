@@ -5040,14 +5040,20 @@ const App = () => {
   }, []);
 
   // route/selected → URL hash
+  const _firstMount = React.useRef(true);
   useEffect(() => {
     const target = route === 'students' && selectedStudent
       ? `${route}/${selectedStudent}`
       : route;
-    if ((window.location.hash || '').replace(/^#\/?/, '') !== target) {
-      // replaceState чтобы не плодить лишние записи в истории на каждый клик
-      history.replaceState(null, '', `#${target}`);
+    const cur = (window.location.hash || '').replace(/^#\/?/, '');
+    if (cur !== target) {
+      // первый запуск — replace (не плодим лишнюю запись поверх внешней),
+      // дальше pushState — чтобы «назад» в браузере ходил между экранами проекта,
+      // а не вылетал на Vercel/GitHub
+      if (_firstMount.current) history.replaceState(null, '', `#${target}`);
+      else history.pushState(null, '', `#${target}`);
     }
+    _firstMount.current = false;
   }, [route, selectedStudent]);
 
   // URL hash → route/selected (кнопки «назад»/«вперёд» в браузере)
