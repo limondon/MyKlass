@@ -3296,12 +3296,17 @@ const FilterSheet = ({ value, onApply, onClose }) => {
 };
 
 // ---------- Group detail / edit / new ----------
+const GROUP_COLORS = ['#3E5F4B','#9B6B2F','#2C5F77','#8C4A4A','#5A4B7C','#6B6024','#7A4A2E','#1F3A2E'];
 const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) => {
   const { students } = window.MK_DATA;
+  const { openSheet } = useApp();
   const [name, setName] = React.useState(group?.name || '');
   const [age, setAge] = React.useState(group?.age || '5–7 лет');
   const [focus, setFocus] = React.useState(group?.focus || '');
   const [room, setRoom] = React.useState(group?.room || 'Кабинет А');
+  const [tag, setTag] = React.useState(group?.tag || '');
+  const [color, setColor] = React.useState(group?.color || GROUP_COLORS[0]);
+  const [scheduleText, setScheduleText] = React.useState((group?.schedule || []).join(', '));
 
   if (mode === 'detail' && group) {
     const roster = students.filter(s => s.groupId === group.id);
@@ -3314,11 +3319,17 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
         foot={<>
           <button className="btn btn-sm" onClick={onClose}>Закрыть</button>
           <span className="grow"></span>
-          <button className="btn btn-sm" onClick={() => { onClose(); notify('Открываем редактор группы', 'ok'); }}>
-            <Icon name="edit" size={13}/> Редактировать
+          <button className="btn btn-sm" onClick={() => {
+            if (window.confirm(`Удалить группу «${group.name}»? Ученики останутся, но без группы.`)) {
+              window.MK_STORE.removeGroup(group.id);
+              onClose();
+              notify(`Группа «${group.name}» удалена`, 'ok');
+            }
+          }} style={{color:'var(--berry)'}}>
+            <Icon name="x" size={13}/> Удалить
           </button>
-          <button className="btn btn-sm btn-primary" onClick={() => { onClose(); notify(`Урок группе «${group.name}» — записываю`, 'ok'); }}>
-            <Icon name="plus" size={13}/> Записать урок
+          <button className="btn btn-sm" onClick={() => { onClose(); openSheet('group', { mode: 'edit', group }); }}>
+            <Icon name="edit" size={13}/> Редактировать
           </button>
         </>}
       >
@@ -3354,6 +3365,39 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
   }
 
   // edit / new
+  const apply = () => {
+    if (!name.trim()) { notify('Укажите название группы', 'err'); return; }
+    const schedule = scheduleText.split(',').map(s => s.trim()).filter(Boolean);
+    // Парсим дни недели и время из первой строки расписания (для days/time)
+    const dayMap = {'вс':0,'пн':1,'вт':2,'ср':3,'чт':4,'пт':5,'сб':6};
+    const days = [];
+    let time = '';
+    for (const s of schedule) {
+      const m = s.toLowerCase().match(/(вс|пн|вт|ср|чт|пт|сб)/);
+      if (m && !days.includes(dayMap[m[1]])) days.push(dayMap[m[1]]);
+      const t = s.match(/\d{1,2}:\d{2}/);
+      if (t && !time) time = t[0];
+    }
+    const payload = {
+      name: name.trim(), age, focus, room,
+      tag: tag.trim() || '—',
+      color,
+      schedule,
+      days,
+      time,
+      capacity: group?.capacity || 8,
+    };
+    if (mode === 'new') {
+      const id = `g_${Date.now().toString(36)}`;
+      window.MK_STORE.addGroup({ id, ...payload });
+      notify(`Группа «${payload.name}» создана`, 'ok');
+    } else {
+      window.MK_STORE.updateGroup(group.id, payload);
+      notify('Изменения сохранены', 'ok');
+    }
+    onClose();
+  };
+
   return (
     <Sheet
       eyebrow={mode === 'new' ? 'новая запись' : 'правка'}
@@ -3363,7 +3407,7 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
       foot={<>
         <button className="btn btn-sm" onClick={onClose}>Отмена</button>
         <span className="grow"></span>
-        <button className="btn btn-sm btn-primary" onClick={() => { onClose(); notify(mode === 'new' ? `Группа «${name || 'без названия'}» создана` : 'Изменения сохранены', 'ok'); }}>
+        <button className="btn btn-sm btn-primary" onClick={apply}>
           <Icon name="check" size={13}/> Сохранить
         </button>
       </>}
@@ -3375,7 +3419,7 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
       <div className="fld-row">
         <div className="fld">
           <label>Возраст</label>
-          <input value={age} onChange={e => setAge(e.target.value)} />
+          <input value={age} onChange={e => setAge(e.target.value)} placeholder="5–6 лет" />
         </div>
         <div className="fld">
           <label>Кабинет</label>
@@ -3391,13 +3435,40 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
         <label>Программа</label>
         <textarea value={focus} onChange={e => setFocus(e.target.value)} placeholder="Чтение по слогам, развитие речи…" />
       </div>
+      <div className="fld-row">
+        <div className="fld">
+          <label>Метка (короткая)</label>
+          <input value={tag} onChange={e => setTag(e.target.value)} placeholder="утро / 1:1 / eng" />
+        </div>
+        <div className="fld">
+          <label>Цвет</label>
+          <div style={{display:'flex', gap:6, flexWrap:'wrap', alignItems:'center'}}>
+            {GROUP_COLORS.map(c => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                title={c}
+                style={{
+                  width:24, height:24, padding:0, borderRadius:'50%', cursor:'pointer',
+                  background:c, border: color === c ? '2px solid var(--ink)' : '2px solid transparent',
+                  outline: color === c ? '2px solid var(--paper-card)' : 'none',
+                  outlineOffset: color === c ? '-4px' : 0,
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="fld">
+        <label>Расписание (через запятую)</label>
+        <input value={scheduleText} onChange={e => setScheduleText(e.target.value)} placeholder="Пн 09:00, Ср 09:00, Пт 09:00" />
+        <div style={{fontSize:11, color:'var(--ink-faint)', marginTop:4}}>день недели + время; распознаются: пн, вт, ср, чт, пт, сб, вс</div>
+      </div>
       {mode === 'new' && (
         <div className="fld">
-          <label>Подбор учеников</label>
-          <div className="choices">
-            {students.slice(0,8).map(s => (
-              <button key={s.id} className="choice">{s.short}</button>
-            ))}
+          <label>Можно потом добавить учеников</label>
+          <div style={{fontSize:12, color:'var(--ink-faint)'}}>
+            После сохранения откройте карточку ученика и поменяйте «Группа».
           </div>
         </div>
       )}
