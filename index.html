@@ -1928,8 +1928,52 @@ window.MK_SCHEDULE = (() => {
 
   const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 
+  // Цвет группы → tone-класс блока в Расписании
+  const _toneForColor = (hex) => {
+    const c = (hex || '').toLowerCase();
+    if (c.includes('3e5f4b') || c.includes('1f3a2e') || c.includes('4a6b3e')) return 'green';
+    if (c.includes('9b6b2f') || c.includes('6b6024') || c.includes('7c5a2e')) return 'ochre';
+    if (c.includes('2c5f77') || c.includes('3d4f7a')) return 'sky';
+    if (c.includes('8c4a4a') || c.includes('7a4a2e')) return 'berry';
+    if (c.includes('5a4b7c') || c.includes('5e3d6b')) return 'violet';
+    return 'green';
+  };
+
+  // Объединённый шаблон недели: статичный MK_DATA.week + автогенерация из MK_STORE.groups[].schedule
+  const getEffectiveTemplate = () => {
+    const staticT = window.MK_DATA.week || [];
+    const dayMap = {'вс':0,'пн':1,'вт':2,'ср':3,'чт':4,'пт':5,'сб':6};
+    const fromGroups = [];
+    for (const g of (window.MK_STORE?.groups || [])) {
+      for (const slot of (g.schedule || [])) {
+        const m = String(slot).toLowerCase().match(/(вс|пн|вт|ср|чт|пт|сб)\s*(\d{1,2}):(\d{2})/);
+        if (!m) continue;
+        // День в формате 0-6 где 0=Пн (как в шаблоне), а dayMap 0=Вс. Переводим: dayMap дает 0-6 как JS getDay, нам нужен 0=Пн => (jsDay+6)%7
+        const jsDay = dayMap[m[1]];
+        const day = (jsDay + 6) % 7;
+        const startH = +m[2] + +m[3]/60;
+        // Дубликат? — пропускаем
+        const dup = staticT.some(b => b.group && b.groupId === g.id && b.day === day && Math.abs(b.start - startH) < 0.05);
+        if (dup) continue;
+        // Также не дублируем уже сгенерированные слоты для этой группы
+        const dupGen = fromGroups.some(b => b.groupId === g.id && b.day === day && Math.abs(b.start - startH) < 0.05);
+        if (dupGen) continue;
+        fromGroups.push({
+          id: `gt_${g.id}_${day}_${m[2]}${m[3]}`,
+          day, start: startH, end: startH + 1,
+          groupId: g.id,
+          subject: g.focus || g.name || 'Занятие',
+          tone: _toneForColor(g.color),
+          group: true,
+        });
+      }
+    }
+    return [...staticT, ...fromGroups];
+  };
+
   return {
     fmtDate,
+    getEffectiveTemplate,
     get overrides() { return _data; },
     subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
 
@@ -1972,7 +2016,7 @@ window.MK_SCHEDULE = (() => {
       const key = fmtDate(date);
       const ovr = _data[key] || {};
       const cancelled = new Set(ovr.cancelled || []);
-      const fromTemplate = (window.MK_DATA.week || [])
+      const fromTemplate = getEffectiveTemplate()
         .filter(t => t.day === day)
         .map(t => ({ ...t, date: key, canceled: cancelled.has(t.id) }));
       const extras = (ovr.extra || []).map(l => ({ ...l, date: key, day }));
@@ -3297,6 +3341,22 @@ const FilterSheet = ({ value, onApply, onClose }) => {
 
 // ---------- Group detail / edit / new ----------
 const GROUP_COLORS = ['#3E5F4B','#9B6B2F','#2C5F77','#8C4A4A','#5A4B7C','#6B6024','#7A4A2E','#1F3A2E'];
+const GROUP_WEEKDAYS = [
+  {k:'пн', label:'Пн'},{k:'вт', label:'Вт'},{k:'ср', label:'Ср'},
+  {k:'чт', label:'Чт'},{k:'пт', label:'Пт'},{k:'сб', label:'Сб'},{k:'вс', label:'Вс'},
+];
+
+// Парсер строк "Пн 09:00" → {day:'пн', time:'09:00'}
+const _parseScheduleSlot = (s) => {
+  const m = String(s).toLowerCase().match(/(вс|пн|вт|ср|чт|пт|сб)\s*(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  return { day: m[1], time: `${m[2].padStart(2,'0')}:${m[3]}` };
+};
+const _formatScheduleSlot = (slot) => {
+  const cap = { пн:'Пн', вт:'Вт', ср:'Ср', чт:'Чт', пт:'Пт', сб:'Сб', вс:'Вс' };
+  return `${cap[slot.day] || slot.day} ${slot.time}`;
+};
+
 const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) => {
   const { students } = window.MK_DATA;
   const { openSheet } = useApp();
@@ -3306,7 +3366,27 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
   const [room, setRoom] = React.useState(group?.room || 'Кабинет А');
   const [tag, setTag] = React.useState(group?.tag || '');
   const [color, setColor] = React.useState(group?.color || GROUP_COLORS[0]);
-  const [scheduleText, setScheduleText] = React.useState((group?.schedule || []).join(', '));
+  // Слоты: [{day:'пн', time:'09:00'}, ...]
+  const [slots, setSlots] = React.useState(() => {
+    const parsed = (group?.schedule || []).map(_parseScheduleSlot).filter(Boolean);
+    return parsed.length ? parsed : [];
+  });
+  // Состав: id учеников, которые в группе. В edit-режиме инит — текущие участники группы.
+  const [members, setMembers] = React.useState(() => {
+    if (!group) return new Set();
+    return new Set(students.filter(s => s.groupId === group.id).map(s => s.id));
+  });
+  const [studentSearch, setStudentSearch] = React.useState('');
+
+  const addSlot = () => setSlots(prev => [...prev, { day: 'пн', time: '09:00' }]);
+  const removeSlot = (i) => setSlots(prev => prev.filter((_, idx) => idx !== i));
+  const updateSlot = (i, patch) => setSlots(prev => prev.map((s, idx) => idx === i ? { ...s, ...patch } : s));
+
+  const toggleMember = (sid) => setMembers(prev => {
+    const next = new Set(prev);
+    if (next.has(sid)) next.delete(sid); else next.add(sid);
+    return next;
+  });
 
   if (mode === 'detail' && group) {
     const roster = students.filter(s => s.groupId === group.id);
@@ -3367,17 +3447,13 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
   // edit / new
   const apply = () => {
     if (!name.trim()) { notify('Укажите название группы', 'err'); return; }
-    const schedule = scheduleText.split(',').map(s => s.trim()).filter(Boolean);
-    // Парсим дни недели и время из первой строки расписания (для days/time)
+    // Сортируем слоты: по дню недели (пн→вс), затем по времени
+    const dayOrder = {'пн':1,'вт':2,'ср':3,'чт':4,'пт':5,'сб':6,'вс':7};
+    const sortedSlots = [...slots].sort((a, b) => (dayOrder[a.day] - dayOrder[b.day]) || a.time.localeCompare(b.time));
+    const schedule = sortedSlots.map(_formatScheduleSlot);
     const dayMap = {'вс':0,'пн':1,'вт':2,'ср':3,'чт':4,'пт':5,'сб':6};
-    const days = [];
-    let time = '';
-    for (const s of schedule) {
-      const m = s.toLowerCase().match(/(вс|пн|вт|ср|чт|пт|сб)/);
-      if (m && !days.includes(dayMap[m[1]])) days.push(dayMap[m[1]]);
-      const t = s.match(/\d{1,2}:\d{2}/);
-      if (t && !time) time = t[0];
-    }
+    const days = [...new Set(sortedSlots.map(s => dayMap[s.day]))];
+    const time = sortedSlots[0]?.time || '';
     const payload = {
       name: name.trim(), age, focus, room,
       tag: tag.trim() || '—',
@@ -3387,15 +3463,33 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
       time,
       capacity: group?.capacity || 8,
     };
+    let groupId;
     if (mode === 'new') {
-      const id = `g_${Date.now().toString(36)}`;
-      window.MK_STORE.addGroup({ id, ...payload });
-      notify(`Группа «${payload.name}» создана`, 'ok');
+      groupId = `g_${Date.now().toString(36)}`;
+      window.MK_STORE.addGroup({ id: groupId, ...payload });
     } else {
+      groupId = group.id;
       window.MK_STORE.updateGroup(group.id, payload);
-      notify('Изменения сохранены', 'ok');
+    }
+    // Применяем состав: каждый отмеченный → groupId этой группы;
+    // каждый, кто был в этой группе, но снят с галочки → groupId стирается
+    const wasInGroup = group ? new Set(students.filter(s => s.groupId === group.id).map(s => s.id)) : new Set();
+    for (const s of students) {
+      const shouldBe = members.has(s.id);
+      const wasIn = wasInGroup.has(s.id);
+      if (shouldBe && s.groupId !== groupId) {
+        window.MK_STORE.updateStudent(s.id, { groupId });
+      } else if (!shouldBe && wasIn) {
+        window.MK_STORE.updateStudent(s.id, { groupId: '' });
+      }
     }
     onClose();
+    notify(
+      mode === 'new'
+        ? `Группа «${payload.name}» создана · ${members.size} ${members.size === 1 ? 'ученик' : 'учеников'}`
+        : 'Изменения сохранены',
+      'ok'
+    );
   };
 
   return (
@@ -3460,18 +3554,124 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
         </div>
       </div>
       <div className="fld">
-        <label>Расписание (через запятую)</label>
-        <input value={scheduleText} onChange={e => setScheduleText(e.target.value)} placeholder="Пн 09:00, Ср 09:00, Пт 09:00" />
-        <div style={{fontSize:11, color:'var(--ink-faint)', marginTop:4}}>день недели + время; распознаются: пн, вт, ср, чт, пт, сб, вс</div>
-      </div>
-      {mode === 'new' && (
-        <div className="fld">
-          <label>Можно потом добавить учеников</label>
-          <div style={{fontSize:12, color:'var(--ink-faint)'}}>
-            После сохранения откройте карточку ученика и поменяйте «Группа».
-          </div>
+        <label>Расписание занятий</label>
+        <div style={{display:'flex', flexDirection:'column', gap:8}}>
+          {slots.length === 0 && (
+            <div style={{fontSize:12.5, color:'var(--ink-faint)', fontStyle:'italic', padding:'8px 0'}}>
+              Пока не задано · нажмите «+ Добавить день»
+            </div>
+          )}
+          {slots.map((slot, i) => (
+            <div key={i} style={{
+              display:'flex', alignItems:'center', gap:8, padding:'8px 10px',
+              background:'var(--paper-deep)', borderRadius:10, border:'1px solid var(--rule-soft)',
+            }}>
+              <div style={{display:'flex', gap:3, flex:1}}>
+                {GROUP_WEEKDAYS.map(d => {
+                  const on = slot.day === d.k;
+                  return (
+                    <button
+                      key={d.k}
+                      onClick={() => updateSlot(i, { day: d.k })}
+                      style={{
+                        flex:1, padding:'5px 0', borderRadius:6, cursor:'pointer',
+                        border:'1px solid ' + (on ? color : 'var(--rule)'),
+                        background: on ? color : 'var(--paper-card)',
+                        color: on ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
+                        fontFamily:'Manrope, sans-serif', fontSize:11, fontWeight: on ? 600 : 500,
+                        transition:'all .12s',
+                      }}
+                    >{d.label}</button>
+                  );
+                })}
+              </div>
+              <input
+                type="time"
+                value={slot.time}
+                onChange={e => updateSlot(i, { time: e.target.value })}
+                style={{
+                  width:90, padding:'6px 8px', border:'1px solid var(--rule)', borderRadius:6,
+                  fontFamily:'JetBrains Mono', fontSize:12, background:'var(--paper-card)',
+                  color:'var(--ink)', outline:'none',
+                }}
+              />
+              <button
+                onClick={() => removeSlot(i)}
+                title="Удалить"
+                style={{
+                  width:28, height:28, padding:0, display:'grid', placeItems:'center', cursor:'pointer',
+                  border:'1px solid var(--rule)', borderRadius:6, background:'var(--paper-card)',
+                  color:'var(--ink-faint)',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color='var(--berry)'; e.currentTarget.style.borderColor='var(--berry)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color='var(--ink-faint)'; e.currentTarget.style.borderColor='var(--rule)'; }}
+              ><Icon name="x" size={11}/></button>
+            </div>
+          ))}
+          <button
+            onClick={addSlot}
+            style={{
+              padding:'8px 12px', borderRadius:8, cursor:'pointer',
+              border:'1.5px dashed var(--rule)', background:'transparent',
+              color:'var(--ink-soft)', fontFamily:'Manrope', fontSize:12.5, fontWeight:500,
+              display:'flex', alignItems:'center', gap:6, justifyContent:'center',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor=color; e.currentTarget.style.color=color; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='var(--rule)'; e.currentTarget.style.color='var(--ink-soft)'; }}
+          ><Icon name="plus" size={12}/> Добавить день</button>
         </div>
-      )}
+      </div>
+
+      <div className="fld">
+        <label>Состав группы · выбрано {members.size}</label>
+        <input
+          value={studentSearch}
+          onChange={e => setStudentSearch(e.target.value)}
+          placeholder="Поиск ученика…"
+          style={{marginBottom:8}}
+        />
+        <div style={{
+          maxHeight:240, overflowY:'auto', border:'1px solid var(--rule)', borderRadius:8,
+          background:'var(--paper-deep)',
+        }}>
+          {students
+            .filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()))
+            .map((s, i, arr) => {
+              const checked = members.has(s.id);
+              const curGroup = s.groupId && s.groupId !== group?.id ? window.MK_STORE.getGroupName(s.groupId) : '';
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => toggleMember(s.id)}
+                  style={{
+                    display:'flex', alignItems:'center', gap:10, padding:'9px 12px',
+                    borderBottom: i < arr.length - 1 ? '1px solid var(--rule-soft)' : 'none',
+                    cursor:'pointer', background: checked ? 'var(--moss-pale)' : 'transparent',
+                    transition:'background .12s',
+                  }}
+                  onMouseEnter={e => { if (!checked) e.currentTarget.style.background='var(--paper-card)'; }}
+                  onMouseLeave={e => { if (!checked) e.currentTarget.style.background='transparent'; }}
+                >
+                  <div style={{
+                    width:18, height:18, borderRadius:5, flexShrink:0,
+                    border:'1.5px solid ' + (checked ? 'var(--forest)' : 'var(--rule)'),
+                    background: checked ? 'var(--forest)' : 'var(--paper-card)',
+                    display:'grid', placeItems:'center', color:'oklch(0.97 0.02 85)',
+                  }}>
+                    {checked && <Icon name="check" size={11}/>}
+                  </div>
+                  <div className="av" style={{color: s.spine, width:28, height:28, fontSize:11}}>{Initials(s.name)}</div>
+                  <div style={{flex:1, minWidth:0}}>
+                    <div style={{fontSize:13, fontWeight:500, color:'var(--ink)'}}>{s.name}</div>
+                    <div style={{fontSize:11, color:'var(--ink-faint)', fontFamily:'JetBrains Mono', letterSpacing:'.05em'}}>
+                      {s.age} лет{curGroup ? ` · сейчас в ${curGroup}` : ''}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+        </div>
+      </div>
     </Sheet>
   );
 };
