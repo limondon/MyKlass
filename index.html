@@ -2846,17 +2846,35 @@ const Modal = ({ eyebrow, title, titleEm, onClose, foot, children }) => {
 // ---------- Record Lesson ----------
 const RecordLessonSheet = ({ initialStudentId, onClose, notify }) => {
   const { students, subjects } = window.MK_DATA;
+  const _todayISO = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
   const [studentId, setStudentId] = React.useState(initialStudentId || students[0].id);
   const [subject, setSubject] = React.useState(subjects[0]);
-  const [date, setDate] = React.useState('2026-05-22');
+  const [date, setDate] = React.useState(_todayISO);
   const [time, setTime] = React.useState('09:00');
   const [dur, setDur] = React.useState('60');
   const [topic, setTopic] = React.useState('');
 
   const submit = () => {
     const st = students.find(s => s.id === studentId);
+    if (!st) { notify('Ученик не найден', 'err'); return; }
+    const [h, m] = time.split(':').map(Number);
+    const start = h + m / 60;
+    const end = start + (parseInt(dur, 10) || 60) / 60;
+    const jsDay = new Date(date + 'T00:00:00').getDay();
+    const day = (jsDay + 6) % 7;
+    const lesson = {
+      day, start, end,
+      studentId: st.id,
+      subject,
+      tone: subject === 'Чтение' || subject === 'Развитие речи' ? 'green'
+          : subject === 'Математика' || subject === 'Логика' ? 'ochre'
+          : subject === 'Письмо' || subject === 'Окружающий мир' ? 'sky'
+          : subject === 'Английский' ? 'violet' : 'green',
+      note: topic || '',
+    };
+    window.MK_SCHEDULE.addExtra(date, lesson);
     onClose();
-    notify(`Урок записан: ${st.short} · ${subject} · ${date.slice(8)}.${date.slice(5,7)} ${time}`, 'ok');
+    notify(`Урок записан: ${st.short} · ${subject} · ${date.split('-').reverse().join('.')} ${time}`, 'ok');
   };
 
   return (
@@ -3079,18 +3097,45 @@ const ContactSheet = ({ student, onClose, notify }) => (
         как связаться
       </div>
       <div className="contact-actions">
-        {[
-          { ic: 'phone',   name: 'Позвонить',     sub: student.phone, msg: 'Открываю набор номера' },
-          { ic: 'share',   name: 'WhatsApp',      sub: 'мессенджер',  msg: 'Открываю WhatsApp' },
-          { ic: 'bell',    name: 'Напомнить мне', sub: 'через 1 час',  msg: 'Напоминание поставлено' },
-          { ic: 'edit',    name: 'Скопировать',   sub: 'номер в буфер', msg: 'Номер скопирован' },
-        ].map(a => (
-          <button key={a.name} className="contact-act" onClick={() => { onClose(); notify(a.msg, 'ok'); }}>
-            <span className="ic-circle"><Icon name={a.ic} size={15}/></span>
-            <span className="name">{a.name}</span>
-            <span className="sub">{a.sub}</span>
-          </button>
-        ))}
+        {(() => {
+          const cleanPhone = (student.phone || '').replace(/[^\d+]/g, '');
+          const actions = [
+            {
+              ic: 'phone', name: 'Позвонить', sub: student.phone,
+              run: () => { window.location.href = `tel:${cleanPhone}`; notify('Открываю набор номера', 'ok'); },
+            },
+            {
+              ic: 'share', name: 'WhatsApp', sub: 'мессенджер',
+              run: () => {
+                const num = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone.replace(/^8/, '7');
+                window.open(`https://wa.me/${num}`, '_blank');
+                notify('Открываю WhatsApp', 'ok');
+              },
+            },
+            {
+              ic: 'edit', name: 'Скопировать', sub: 'номер в буфер',
+              run: () => {
+                if (navigator.clipboard) {
+                  navigator.clipboard.writeText(student.phone).then(
+                    () => notify('Номер скопирован', 'ok'),
+                    () => notify('Не удалось скопировать', 'err')
+                  );
+                } else notify('Буфер обмена недоступен', 'err');
+              },
+            },
+            {
+              ic: 'bell', name: 'Напомнить мне', sub: 'через 1 час',
+              run: () => { notify('Напоминание поставлено', 'ok'); },
+            },
+          ];
+          return actions.map(a => (
+            <button key={a.name} className="contact-act" onClick={() => a.run()}>
+              <span className="ic-circle"><Icon name={a.ic} size={15}/></span>
+              <span className="name">{a.name}</span>
+              <span className="sub">{a.sub}</span>
+            </button>
+          ));
+        })()}
       </div>
     </div>
   </Sheet>
