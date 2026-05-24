@@ -4375,6 +4375,12 @@ const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentU
 const OverviewPane = ({ s, left, openSheet, notify, skillsStore }) => {
   const skills = skillsStore.getSkills(s);
   const hidden = skillsStore.isHidden(s.id);
+  const _nowOv = new Date();
+  const _mruOv = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const _todayLabel = `на ${_nowOv.getDate()} ${_mruOv[_nowOv.getMonth()]}`;
+  // Последняя заметка из notesList
+  const _storedS = window.MK_STORE.getStudent(s.id);
+  const _lastNote = (_storedS?.notesList || [])[0] || null;
   return (
   <>
     <div className="profile-section">
@@ -4389,7 +4395,7 @@ const OverviewPane = ({ s, left, openSheet, notify, skillsStore }) => {
           <div className="section-h" style={{marginTop:24}}>
             <h3>Прогресс <em>ученика</em></h3>
             <span style={{display:'flex', gap: 10, alignItems:'center', fontFamily:'JetBrains Mono', fontSize: 10.5, letterSpacing:'.12em', color:'var(--ink-faint)', textTransform:'uppercase'}}>
-              <span>на 21 мая</span>
+              <span>{_todayLabel}</span>
               <button className="link-btn" onClick={() => { skillsStore.setHide(s.id, true); notify('Раздел «Прогресс» скрыт'); }}>
                 <Icon name="x" size={10}/> скрыть
               </button>
@@ -4419,14 +4425,27 @@ const OverviewPane = ({ s, left, openSheet, notify, skillsStore }) => {
       </div>
       <ParentBlock s={s} openSheet={openSheet} />
 
-      <div className="section-h" style={{marginTop:24}}>
-        <h3>Моя <em>заметка</em></h3>
-        <span className="tag">от 19 мая</span>
-      </div>
-      <div className="font-serif italic" style={{fontSize:17, lineHeight:1.5, color:'var(--ink)', padding:'6px 0'}}>
-        «Очень любопытная, тянется к чтению.<br/>
-        Дома мало читают вслух — попросить маму уделять 15 минут в день.»
-      </div>
+      {_lastNote ? (
+        <>
+          <div className="section-h" style={{marginTop:24}}>
+            <h3>Моя <em>заметка</em></h3>
+            <span className="tag">{_lastNote.date || '—'}{_lastNote.tag ? ` · ${_lastNote.tag}` : ''}</span>
+          </div>
+          <div className="font-serif italic" style={{fontSize:17, lineHeight:1.5, color:'var(--ink)', padding:'6px 0'}}>
+            «{_lastNote.text}»
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="section-h" style={{marginTop:24}}>
+            <h3>Моя <em>заметка</em></h3>
+            <span className="tag">пока нет</span>
+          </div>
+          <div className="font-serif italic" style={{fontSize:15, lineHeight:1.5, color:'var(--ink-faint)', padding:'6px 0'}}>
+            Откройте вкладку «Заметки» и добавьте первое наблюдение об ученике.
+          </div>
+        </>
+      )}
     </div>
   </>
   );
