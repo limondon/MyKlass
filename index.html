@@ -4562,9 +4562,10 @@ window.Schedule = Schedule;
 // Attendance journal
 const MK_ATT_KEY = 'mk.attendance';
 const Attendance = () => {
-  const { students, attendance } = window.MK_DATA;
+  const { students, groups, attendance } = window.MK_DATA;
   const { notify } = useApp();
   const [period, setPeriod] = React.useState('2w'); // '2w' | 'month' | 'sem'
+  const [groupFilter, setGroupFilter] = React.useState('all'); // 'all' | groupId
   const [marks, setMarks] = React.useState(() => {
     try { const saved = JSON.parse(localStorage.getItem(MK_ATT_KEY) || 'null'); if (saved) return saved; } catch {}
     return attendance || {};
@@ -4624,6 +4625,10 @@ const Attendance = () => {
     });
   };
 
+  const visibleStudents = groupFilter === 'all'
+    ? students
+    : students.filter(s => s.groupId === groupFilter);
+
   return (
     <div className="content">
       <div className="attendance-table">
@@ -4638,9 +4643,44 @@ const Attendance = () => {
           <button className="btn btn-sm" onClick={() => { notify('Открываю окно печати'); setTimeout(() => window.print(), 200); }}>
             <Icon name="print" size={13}/> Печать
           </button>
-          <button className="btn btn-sm" onClick={() => downloadCSV(students, marks, cfg)}>
+          <button className="btn btn-sm" onClick={() => downloadCSV(visibleStudents, marks, cfg)}>
             <Icon name="download" size={13}/> CSV
           </button>
+        </div>
+
+        <div className="att-group-tabs" style={{display:'flex', gap:6, flexWrap:'wrap', padding:'10px 0 14px', borderBottom:'1px dashed var(--rule)', marginBottom:14}}>
+          <button
+            onClick={() => setGroupFilter('all')}
+            style={{
+              padding:'5px 12px', borderRadius:999, fontSize:11.5, letterSpacing:'.04em', cursor:'pointer',
+              border:'1px solid ' + (groupFilter === 'all' ? 'var(--forest)' : 'var(--rule)'),
+              background: groupFilter === 'all' ? 'var(--forest)' : 'transparent',
+              color: groupFilter === 'all' ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
+              fontFamily:'Manrope, sans-serif', fontWeight: 500,
+            }}
+          >Все · {students.length}</button>
+          {groups.map(g => {
+            const cnt = students.filter(s => s.groupId === g.id).length;
+            const on = groupFilter === g.id;
+            return (
+              <button
+                key={g.id}
+                onClick={() => setGroupFilter(g.id)}
+                style={{
+                  padding:'5px 12px', borderRadius:999, fontSize:11.5, letterSpacing:'.04em', cursor:'pointer',
+                  border:'1px solid ' + (on ? g.color : 'var(--rule)'),
+                  background: on ? g.color : 'transparent',
+                  color: on ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
+                  fontFamily:'Manrope, sans-serif', fontWeight: 500,
+                  display:'flex', alignItems:'center', gap:6,
+                }}
+                title={g.focus}
+              >
+                {!on && <span style={{width:8, height:8, borderRadius:2, background:g.color, display:'inline-block'}}></span>}
+                {g.name} · {cnt}
+              </button>
+            );
+          })}
         </div>
 
         <div className="att-grid" style={{gridTemplateColumns: `180px repeat(${cfg.days.length}, 1fr) 80px`}}>
@@ -4651,7 +4691,7 @@ const Attendance = () => {
           ))}
           <div className="att-h">ПОСЕЩАЕМОСТЬ</div>
 
-          {students.map(s => {
+          {visibleStudents.map(s => {
             const studentMarks = adapt(marks[s.id] || []);
             const rate = calcRate(studentMarks);
             return (
@@ -4660,7 +4700,7 @@ const Attendance = () => {
                   <div className="av" style={{color: s.spine}}>{Initials(s.name)}</div>
                   <div>
                     <div>{s.short}</div>
-                    <div style={{fontFamily:'JetBrains Mono', fontSize:9.5, color:'var(--ink-faint)', letterSpacing:'.1em', textTransform:'uppercase'}}>{s.group}</div>
+                    <div style={{fontFamily:'JetBrains Mono', fontSize:9.5, color:'var(--ink-faint)', letterSpacing:'.1em', textTransform:'uppercase'}}>{window.MK_STORE.getGroupName(s.groupId) || s.group || ''}</div>
                   </div>
                 </div>
                 {studentMarks.map((m, i) => (
