@@ -3841,12 +3841,24 @@ const Students = ({ selectedId, setSelectedId }) => {
   const [students, setStudents] = React.useState(() => window.MK_STORE.students);
   const [q, setQ] = React.useState('');
   const [groupFilter, setGroupFilter] = React.useState('all');
+  const [filterOpen, setFilterOpen] = React.useState(false);
   const { openSheet, notify } = useApp();
   const skillsStore = useSkillsStore();
   const groups = window.MK_STORE.groups;
+  const dropdownRef = React.useRef(null);
 
   // Re-sync from store when students change
   React.useEffect(() => window.MK_STORE.subscribe(() => setStudents([...window.MK_STORE.students])), []);
+
+  // Close dropdown on outside click / Escape
+  React.useEffect(() => {
+    if (!filterOpen) return;
+    const onClick = (e) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setFilterOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setFilterOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [filterOpen]);
 
   const filtered = students.filter(s => {
     if (groupFilter !== 'all' && s.groupId !== groupFilter) return false;
@@ -3854,6 +3866,17 @@ const Students = ({ selectedId, setSelectedId }) => {
     return s.name.toLowerCase().includes(q.toLowerCase()) || gname.toLowerCase().includes(q.toLowerCase());
   });
   const sel = students.find(s => s.id === selectedId) || students[0];
+
+  const activeGroup = groups.find(g => g.id === groupFilter);
+  const activeColor = activeGroup ? activeGroup.color : 'var(--ink-faint)';
+  const activeName = activeGroup ? activeGroup.name : 'Все группы';
+
+  const _itemBase = {
+    display:'flex', alignItems:'center', gap:10, padding:'9px 12px',
+    cursor:'pointer', fontFamily:'Manrope, sans-serif', fontSize:13,
+    color:'var(--ink-soft)', borderBottom:'1px solid var(--rule-soft)',
+    transition:'background .12s',
+  };
 
   return (
     <div className="content">
@@ -3869,39 +3892,74 @@ const Students = ({ selectedId, setSelectedId }) => {
             />
             <span className="count">{filtered.length} / {students.length}</span>
           </div>
-          <div style={{display:'flex', gap:5, flexWrap:'wrap', padding:'10px 16px 12px', borderBottom:'1px dashed var(--rule)'}}>
+          <div ref={dropdownRef} style={{position:'relative', padding:'8px 14px 12px', borderBottom:'1px dashed var(--rule)'}}>
             <button
-              onClick={() => setGroupFilter('all')}
+              onClick={() => setFilterOpen(o => !o)}
               style={{
-                padding:'4px 10px', borderRadius:999, fontSize:11, letterSpacing:'.03em', cursor:'pointer',
-                border:'1px solid ' + (groupFilter === 'all' ? 'var(--forest)' : 'var(--rule)'),
-                background: groupFilter === 'all' ? 'var(--forest)' : 'transparent',
-                color: groupFilter === 'all' ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
-                fontFamily:'Manrope, sans-serif', fontWeight: 500,
+                width:'100%', padding:'7px 11px', borderRadius:8, cursor:'pointer',
+                border:'1px solid ' + (filterOpen ? 'var(--forest)' : 'var(--rule)'),
+                background: filterOpen ? 'var(--moss-pale)' : 'var(--paper-deep)',
+                display:'flex', alignItems:'center', gap:9,
+                fontFamily:'Manrope, sans-serif', fontSize:12.5,
+                color:'var(--ink)', transition:'all .15s',
               }}
-            >Все · {students.length}</button>
-            {groups.map(g => {
-              const cnt = students.filter(s => s.groupId === g.id).length;
-              const on = groupFilter === g.id;
-              return (
-                <button
-                  key={g.id}
-                  onClick={() => setGroupFilter(g.id)}
-                  style={{
-                    padding:'4px 10px', borderRadius:999, fontSize:11, letterSpacing:'.03em', cursor:'pointer',
-                    border:'1px solid ' + (on ? g.color : 'var(--rule)'),
-                    background: on ? g.color : 'transparent',
-                    color: on ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
-                    fontFamily:'Manrope, sans-serif', fontWeight: 500,
-                    display:'flex', alignItems:'center', gap:5,
-                  }}
-                  title={g.focus}
+            >
+              <span style={{
+                width:10, height:10, borderRadius:'50%', background: activeColor,
+                flexShrink:0, boxShadow: groupFilter === 'all' ? 'inset 0 0 0 1px var(--rule)' : 'none',
+              }}/>
+              <span style={{flex:1, textAlign:'left', fontWeight: 500}}>{activeName}</span>
+              <span style={{
+                fontFamily:'JetBrains Mono', fontSize:10, color:'var(--ink-faint)',
+                letterSpacing:'.08em', padding:'1px 6px', background:'var(--paper-card)',
+                borderRadius:4, border:'1px solid var(--rule-soft)',
+              }}>
+                {groupFilter === 'all' ? students.length : students.filter(s => s.groupId === groupFilter).length}
+              </span>
+              <span style={{color:'var(--ink-faint)', transform: filterOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition:'transform .15s'}}>
+                <Icon name="chevron" size={11}/>
+              </span>
+            </button>
+
+            {filterOpen && (
+              <div style={{
+                position:'absolute', top:'calc(100% - 6px)', left:14, right:14, zIndex:30,
+                background:'var(--paper-card)', border:'1px solid var(--rule)', borderRadius:10,
+                boxShadow:'0 8px 24px -6px rgba(0,0,0,.18)', overflow:'hidden',
+                maxHeight: 320, overflowY: 'auto',
+              }}>
+                <div
+                  onClick={() => { setGroupFilter('all'); setFilterOpen(false); }}
+                  onMouseEnter={e => e.currentTarget.style.background='var(--paper-deep)'}
+                  onMouseLeave={e => e.currentTarget.style.background='transparent'}
+                  style={{..._itemBase, background: groupFilter === 'all' ? 'var(--moss-pale)' : 'transparent'}}
                 >
-                  {!on && <span style={{width:7, height:7, borderRadius:2, background:g.color, display:'inline-block'}}></span>}
-                  {g.name} · {cnt}
-                </button>
-              );
-            })}
+                  <span style={{width:10, height:10, borderRadius:'50%', background:'var(--ink-faint)', boxShadow:'inset 0 0 0 1px var(--rule)', flexShrink:0}}/>
+                  <span style={{flex:1, fontWeight: groupFilter === 'all' ? 600 : 500, color: groupFilter === 'all' ? 'var(--ink)' : 'var(--ink-soft)'}}>Все группы</span>
+                  <span style={{fontFamily:'JetBrains Mono', fontSize:10, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{students.length}</span>
+                  {groupFilter === 'all' && <Icon name="check" size={13}/>}
+                </div>
+                {groups.map(g => {
+                  const cnt = students.filter(s => s.groupId === g.id).length;
+                  const on = groupFilter === g.id;
+                  return (
+                    <div
+                      key={g.id}
+                      onClick={() => { setGroupFilter(g.id); setFilterOpen(false); }}
+                      onMouseEnter={e => e.currentTarget.style.background='var(--paper-deep)'}
+                      onMouseLeave={e => e.currentTarget.style.background= on ? 'var(--moss-pale)' : 'transparent'}
+                      style={{..._itemBase, background: on ? 'var(--moss-pale)' : 'transparent'}}
+                      title={g.focus}
+                    >
+                      <span style={{width:10, height:10, borderRadius:'50%', background:g.color, flexShrink:0}}/>
+                      <span style={{flex:1, minWidth:0, fontWeight: on ? 600 : 500, color: on ? 'var(--ink)' : 'var(--ink-soft)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{g.name}</span>
+                      <span style={{fontFamily:'JetBrains Mono', fontSize:10, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{cnt}</span>
+                      {on && <Icon name="check" size={13}/>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
           <div className="students-list">
             {filtered.map(s => {
