@@ -3680,13 +3680,16 @@ const useSkillsStore = () => {
 const Students = ({ selectedId, setSelectedId }) => {
   const [students, setStudents] = React.useState(() => window.MK_STORE.students);
   const [q, setQ] = React.useState('');
+  const [groupFilter, setGroupFilter] = React.useState('all');
   const { openSheet, notify } = useApp();
   const skillsStore = useSkillsStore();
+  const groups = window.MK_STORE.groups;
 
   // Re-sync from store when students change
   React.useEffect(() => window.MK_STORE.subscribe(() => setStudents([...window.MK_STORE.students])), []);
 
   const filtered = students.filter(s => {
+    if (groupFilter !== 'all' && s.groupId !== groupFilter) return false;
     const gname = window.MK_STORE.getGroupName(s.groupId) || '';
     return s.name.toLowerCase().includes(q.toLowerCase()) || gname.toLowerCase().includes(q.toLowerCase());
   });
@@ -3705,6 +3708,40 @@ const Students = ({ selectedId, setSelectedId }) => {
               onChange={e => setQ(e.target.value)}
             />
             <span className="count">{filtered.length} / {students.length}</span>
+          </div>
+          <div style={{display:'flex', gap:5, flexWrap:'wrap', padding:'10px 16px 12px', borderBottom:'1px dashed var(--rule)'}}>
+            <button
+              onClick={() => setGroupFilter('all')}
+              style={{
+                padding:'4px 10px', borderRadius:999, fontSize:11, letterSpacing:'.03em', cursor:'pointer',
+                border:'1px solid ' + (groupFilter === 'all' ? 'var(--forest)' : 'var(--rule)'),
+                background: groupFilter === 'all' ? 'var(--forest)' : 'transparent',
+                color: groupFilter === 'all' ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
+                fontFamily:'Manrope, sans-serif', fontWeight: 500,
+              }}
+            >Все · {students.length}</button>
+            {groups.map(g => {
+              const cnt = students.filter(s => s.groupId === g.id).length;
+              const on = groupFilter === g.id;
+              return (
+                <button
+                  key={g.id}
+                  onClick={() => setGroupFilter(g.id)}
+                  style={{
+                    padding:'4px 10px', borderRadius:999, fontSize:11, letterSpacing:'.03em', cursor:'pointer',
+                    border:'1px solid ' + (on ? g.color : 'var(--rule)'),
+                    background: on ? g.color : 'transparent',
+                    color: on ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
+                    fontFamily:'Manrope, sans-serif', fontWeight: 500,
+                    display:'flex', alignItems:'center', gap:5,
+                  }}
+                  title={g.focus}
+                >
+                  {!on && <span style={{width:7, height:7, borderRadius:2, background:g.color, display:'inline-block'}}></span>}
+                  {g.name} · {cnt}
+                </button>
+              );
+            })}
           </div>
           <div className="students-list">
             {filtered.map(s => {
@@ -4779,7 +4816,7 @@ const Attendance = () => {
           </button>
         </div>
 
-        <div className="att-group-tabs" style={{display:'flex', gap:6, flexWrap:'wrap', padding:'10px 0 14px', borderBottom:'1px dashed var(--rule)', marginBottom:14}}>
+        <div className="att-group-tabs" style={{display:'flex', gap:6, flexWrap:'wrap', padding:'14px 22px', borderBottom:'1px dashed var(--rule)', minWidth:'900px'}}>
           <button
             onClick={() => setGroupFilter('all')}
             style={{
@@ -4814,7 +4851,7 @@ const Attendance = () => {
           })}
         </div>
 
-        <div className="att-grid" style={{gridTemplateColumns: `180px repeat(${cfg.days.length}, 1fr) 80px`}}>
+        <div className="att-grid" style={{gridTemplateColumns: `180px repeat(${cfg.days.length}, 1fr) 120px`}}>
           {/* header row */}
           <div className="att-h name">УЧЕНИК</div>
           {cfg.days.map((d, i) => (
