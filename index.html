@@ -1793,24 +1793,30 @@ window.MK_STORE = (() => {
     save(_data);
   }
 
+  const _subs = new Set();
+  const _emit = () => _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } });
+  const _commit = () => { save(_data); _emit(); };
+
   return {
     get students() { return _data.students; },
     get groups() { return _data.groups; },
 
+    subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
+
     // Students
-    setStudents(s) { _data.students = s; save(_data); },
+    setStudents(s) { _data.students = s; _commit(); },
     updateStudent(id, updater) {
       _data.students = _data.students.map(s => s.id === id ? (typeof updater === 'function' ? updater({...s}) : {...s,...updater}) : s);
-      save(_data);
+      _commit();
     },
-    addStudent(s) { _data.students = [..._data.students, s]; save(_data); },
-    removeStudent(id) { _data.students = _data.students.filter(s => s.id !== id); save(_data); },
+    addStudent(s) { _data.students = [..._data.students, s]; _commit(); },
+    removeStudent(id) { _data.students = _data.students.filter(s => s.id !== id); _commit(); },
 
     // Groups
-    setGroups(g) { _data.groups = g; save(_data); },
-    updateGroup(id, upd) { _data.groups = _data.groups.map(g => g.id === id ? {...g,...upd} : g); save(_data); },
-    addGroup(g) { _data.groups = [..._data.groups, g]; save(_data); },
-    removeGroup(id) { _data.groups = _data.groups.filter(g => g.id !== id); save(_data); },
+    setGroups(g) { _data.groups = g; _commit(); },
+    updateGroup(id, upd) { _data.groups = _data.groups.map(g => g.id === id ? {...g,...upd} : g); _commit(); },
+    addGroup(g) { _data.groups = [..._data.groups, g]; _commit(); },
+    removeGroup(id) { _data.groups = _data.groups.filter(g => g.id !== id); _commit(); },
 
     // Utils
     getStudent(id) { return _data.students.find(s => s.id === id); },
@@ -3195,19 +3201,65 @@ const Dashboard = ({ goTo }) => {
   const { today, alerts, students, week } = window.MK_DATA;
   const { openSheet, notify } = useApp();
 
-  const todaySchedule = [
-    { time: '09:00', dur: '60 МИН', name: 'Лиза Морозова', sub: 'индив.', topic: 'Слоговое чтение, текст «Зима»', status: 'done',  studentId: 's1', subject: 'Чтение', start: 9,  end: 10 },
-    { time: '10:30', dur: '60 МИН', name: 'Тима Зайцев', sub: 'математика', topic: 'Состав числа 8, задачи в одно действие', status: 'done', studentId: 's6', subject: 'Математика', start: 10.5, end: 11.5 },
-    { time: '12:00', dur: '60 МИН', name: 'Лёва Фёдоров', sub: 'логика', topic: 'Закономерности, лишний предмет', status: 'now', studentId: 's12', subject: 'Логика', start: 12, end: 13 },
-    { time: '16:00', dur: '60 МИН', name: 'Букварята · группа', sub: '2 ученика', topic: 'Буква Ж, чтение по слогам', status: 'next', group: true, groupId: 'g3', subject: 'Чтение по слогам', start: 16, end: 17 },
-    { time: '18:00', dur: '60 МИН', name: 'Миша Васильев', sub: 'математика', topic: 'Перенесён → пятница', status: 'cancel', studentId: 's8', subject: 'Математика', start: 18, end: 19, canceled: true },
-  ];
+  const _now = new Date();
+  const _todayIdx = (_now.getDay() + 6) % 7;
+  const _fmtTime = (h) => `${String(Math.floor(h)).padStart(2,'0')}:${String(Math.round((h % 1) * 60)).padStart(2,'0')}`;
+  const _nowH = _now.getHours() + _now.getMinutes() / 60;
+  const _groups = window.MK_STORE.groups;
+  const _mruDash = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const todaySchedule = week
+    .filter(b => b.day === _todayIdx)
+    .sort((a, b) => a.start - b.start)
+    .map(b => {
+      let name, sub, topic = b.subject;
+      if (b.group) {
+        const g = _groups.find(g => g.id === b.groupId);
+        const cnt = students.filter(s => s.groupId === b.groupId).length;
+        name = (g?.name || 'Группа') + ' · группа';
+        sub = `${cnt} ${cnt === 1 ? 'ученик' : cnt < 5 ? 'ученика' : 'учеников'}`;
+      } else {
+        const st = students.find(s => s.id === b.studentId);
+        name = st?.name || '—';
+        sub = (b.subject || '').toLowerCase();
+      }
+      let status;
+      if (b.canceled) status = 'cancel';
+      else if (_nowH > b.end) status = 'done';
+      else if (_nowH >= b.start) status = 'now';
+      else status = 'next';
+      return {
+        ...b,
+        time: _fmtTime(b.start),
+        dur: `${Math.round((b.end - b.start) * 60)} МИН`,
+        name, sub, topic, status,
+      };
+    });
 
-  const lowPack = students.filter(s => s.pack - s.used <= 1);
-  const totalActive = students.filter(s => s.pack - s.used > 0).length;
-  const todayLessons = window.MK_DATA.week.filter(w => w.day === 2); // Wed
+  const lowPack = students.filter(s => (s.pack - s.used) <= 1);
+  const totalActive = students.filter(s => (s.pack - s.used) > 0).length;
 
-  const monthIncome = 184500;
+  // Поступления за текущий месяц — суммируем по платёжным событиям студентов
+  const monthIncome = (() => {
+    const targetMonth = _now.getMonth(); // 0–11
+    const targetYear = _now.getFullYear();
+    let sum = 0;
+    for (const s of students) {
+      for (const e of (s.events || [])) {
+        if (e.type !== 'payment') continue;
+        // дата формата "ДД.ММ.ГГГГ"
+        const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
+        if (!m) continue;
+        const month = parseInt(m[2], 10) - 1;
+        const year = parseInt(m[3], 10);
+        if (month !== targetMonth || year !== targetYear) continue;
+        // вытаскиваем рубли из note: "Оплата, 8 занятий — 9 600 ₽"
+        const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
+        if (rub) sum += parseInt(rub[1].replace(/[\s ]/g, ''), 10) || 0;
+        else sum += s.price || 0;
+      }
+    }
+    return sum;
+  })();
 
   return (
     <div className="content">
@@ -3219,13 +3271,13 @@ const Dashboard = ({ goTo }) => {
           <div className="date">
             {today.weekday}, <em>{today.date}</em> {today.month}
           </div>
-          <div className="weekday">21 · 05 · 2026  ·  неделя 21</div>
+          <div className="weekday">{String(_now.getDate()).padStart(2,'0')} · {String(_now.getMonth()+1).padStart(2,'0')} · {_now.getFullYear()}  ·  неделя {(() => { const u=new Date(Date.UTC(_now.getFullYear(),_now.getMonth(),_now.getDate())); const dn=u.getUTCDay()||7; u.setUTCDate(u.getUTCDate()+4-dn); const y=new Date(Date.UTC(u.getUTCFullYear(),0,1)); return Math.ceil((((u-y)/86400000)+1)/7); })()}</div>
 
           <div className="summary">
-            <div><span className="n">{today.summary.lessons}</span><span className="l">уроков</span></div>
-            <div><span className="n">{today.summary.students}</span><span className="l">учеников</span></div>
-            <div><span className="n">{today.summary.hours}<small> ч</small></span><span className="l">в работе</span></div>
-            <div><span className="n">2</span><span className="l">переноса</span></div>
+            <div><span className="n">{todaySchedule.filter(t => !t.canceled).length}</span><span className="l">уроков</span></div>
+            <div><span className="n">{new Set(todaySchedule.filter(t => !t.canceled).map(t => t.group ? `g:${t.groupId}` : `s:${t.studentId}`)).size}</span><span className="l">записей</span></div>
+            <div><span className="n">{todaySchedule.filter(t => !t.canceled).reduce((acc, t) => acc + (t.end - t.start), 0).toFixed(1)}<small> ч</small></span><span className="l">в работе</span></div>
+            <div><span className="n">{todaySchedule.filter(t => t.canceled).length}</span><span className="l">переносов</span></div>
           </div>
 
           <div className="weekstrip">
@@ -3284,14 +3336,14 @@ const Dashboard = ({ goTo }) => {
         <div className="stat" onClick={() => goTo('schedule')} style={{cursor:'pointer'}}>
           <div className="ornament"><Icon name="cal" size={14}/></div>
           <div className="stat-label">Уроков в неделю</div>
-          <div className="stat-num">26</div>
-          <div className="stat-foot">из 32 возможных · загрузка <b>81%</b></div>
+          <div className="stat-num">{week.filter(b => !b.canceled).length}</div>
+          <div className="stat-foot">по расписанию</div>
         </div>
         <div className="stat" onClick={() => notify('Отчёт за май готовлю — открою в новой вкладке')} style={{cursor:'pointer'}}>
           <div className="ornament"><Icon name="sparkle" size={14}/></div>
-          <div className="stat-label">Поступления, май</div>
-          <div className="stat-num font-serif">{(monthIncome/1000).toFixed(1)}<small> т ₽</small></div>
-          <div className="stat-foot"><span className="delta-up">+12%</span> к апрелю · 9 пакетов оплачено</div>
+          <div className="stat-label">Поступления, {_mruDash[_now.getMonth()]}</div>
+          <div className="stat-num font-serif">{monthIncome >= 1000 ? `${(monthIncome/1000).toFixed(1)}` : monthIncome}<small> {monthIncome >= 1000 ? 'т ' : ''}₽</small></div>
+          <div className="stat-foot">{(() => { const cnt = students.reduce((a,s) => a + (s.events||[]).filter(e => { const m=/^\d{2}\.(\d{2})\.(\d{4})$/.exec(e.date||''); return e.type==='payment' && m && +m[1]-1===_now.getMonth() && +m[2]===_now.getFullYear(); }).length, 0); return `${cnt} ${cnt===1?'пакет оплачен':cnt<5?'пакета оплачено':'пакетов оплачено'}`; })()}</div>
         </div>
         <div className="stat" onClick={() => goTo('students')} style={{cursor:'pointer'}}>
           <div className="ornament"><Icon name="bell" size={14}/></div>
@@ -3417,13 +3469,7 @@ const Students = ({ selectedId, setSelectedId }) => {
   const skillsStore = useSkillsStore();
 
   // Re-sync from store when students change
-  React.useEffect(() => {
-    const interval = setInterval(() => {
-      const fresh = window.MK_STORE.students;
-      setStudents(prev => prev === fresh ? prev : [...fresh]);
-    }, 500);
-    return () => clearInterval(interval);
-  }, []);
+  React.useEffect(() => window.MK_STORE.subscribe(() => setStudents([...window.MK_STORE.students])), []);
 
   const filtered = students.filter(s => {
     const gname = window.MK_STORE.getGroupName(s.groupId) || '';
@@ -4822,6 +4868,8 @@ const App = () => {
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [toasts, setToasts] = useState([]);
   const [sheet, setSheet] = useState(null);   // { kind, props }
+  const [, _rerender] = React.useReducer(x => x + 1, 0);
+  useEffect(() => window.MK_STORE.subscribe(_rerender), []);
 
   const notify = React.useCallback((msg, tone = 'ok') => {
     const id = Date.now() + Math.random();
