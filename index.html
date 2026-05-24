@@ -3997,6 +3997,14 @@ const NotesPane = ({ s, notify }) => {
     const stored = window.MK_STORE.getStudent(s.id);
     return stored?.notesList || (s.notes ? [{date:'—', tag:'наблюдение', text: s.notes}] : []);
   });
+  const [editIdx, setEditIdx] = React.useState(-1);
+  const [editText, setEditText] = React.useState('');
+  const [editTag, setEditTag] = React.useState('наблюдение');
+
+  const persist = (next) => {
+    setNotes(next);
+    window.MK_STORE.updateStudent(s.id, st => ({...st, notesList: next}));
+  };
 
   const save = () => {
     const text = draft.trim();
@@ -4004,11 +4012,33 @@ const NotesPane = ({ s, notify }) => {
     const months = ['ЯНВ','ФЕВ','МАР','АПР','МАЯ','ИЮН','ИЮЛ','АВГ','СЕН','ОКТ','НОЯ','ДЕК'];
     const d = new Date();
     const date = `${String(d.getDate()).padStart(2,'0')} ${months[d.getMonth()]}`;
-    const newNotes = [{ date, tag, text }, ...notes];
-    setNotes(newNotes);
+    persist([{ date, tag, text }, ...notes]);
     setDraft('');
-    window.MK_STORE.updateStudent(s.id, st => ({...st, notesList: newNotes}));
     notify && notify('Заметка сохранена');
+  };
+
+  const beginEdit = (i) => {
+    setEditIdx(i);
+    setEditText(notes[i].text);
+    setEditTag(notes[i].tag || 'наблюдение');
+  };
+
+  const cancelEdit = () => { setEditIdx(-1); setEditText(''); };
+
+  const saveEdit = () => {
+    const text = editText.trim();
+    if (!text) { notify && notify('Текст не может быть пустым'); return; }
+    const next = notes.map((n, idx) => idx === editIdx ? { ...n, text, tag: editTag } : n);
+    persist(next);
+    setEditIdx(-1); setEditText('');
+    notify && notify('Заметка обновлена');
+  };
+
+  const remove = (i) => {
+    if (!window.confirm('Удалить эту заметку?')) return;
+    persist(notes.filter((_, idx) => idx !== i));
+    if (editIdx === i) cancelEdit();
+    notify && notify('Заметка удалена');
   };
 
   return (
@@ -4019,11 +4049,54 @@ const NotesPane = ({ s, notify }) => {
         <span className="tag">{notes.length} записей</span>
       </div>
       <div style={{display:'flex', flexDirection:'column', gap:18}}>
-        {notes.map((n, i) => (
-          <div key={i} style={{padding:'14px 16px', border:'1px solid var(--rule)', borderRadius:12, background:'oklch(0.97 0.018 82)'}}>
+        {notes.map((n, i) => editIdx === i ? (
+          <div key={i} style={{padding:'14px 16px', border:'1px solid var(--forest)', borderRadius:12, background:'var(--paper-deep)'}}>
+            <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:8}}>
+              <span style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', color:'var(--ink-faint)'}}>{n.date}</span>
+              <div style={{display:'flex', gap:6}}>
+                {['наблюдение','программа','болезнь'].map(tg => (
+                  <button key={tg} onClick={() => setEditTag(tg)} style={{
+                    padding:'3px 9px', borderRadius:999, fontSize:11, letterSpacing:'.05em', cursor:'pointer',
+                    border:'1px solid ' + (editTag === tg ? 'var(--forest)' : 'var(--rule)'),
+                    background: editTag === tg ? 'var(--forest)' : 'var(--paper-card)',
+                    color: editTag === tg ? 'oklch(0.97 0.02 85)' : 'var(--ink-soft)',
+                    fontFamily:'Manrope, sans-serif',
+                  }}>{tg}</button>
+                ))}
+              </div>
+            </div>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              autoFocus
+              style={{width:'100%', minHeight:64, border:'none', outline:'none', background:'transparent',
+                      resize:'vertical', fontFamily:'Instrument Serif, serif', fontStyle:'italic',
+                      fontSize:17, lineHeight:1.45, color:'var(--ink)'}}
+            />
+            <div style={{display:'flex', justifyContent:'flex-end', gap:8, marginTop:10, paddingTop:10, borderTop:'1px dashed var(--rule)'}}>
+              <button className="btn btn-sm" onClick={cancelEdit}>Отмена</button>
+              <button className="btn btn-sm btn-primary" onClick={saveEdit}>Сохранить</button>
+            </div>
+          </div>
+        ) : (
+          <div key={i} className="note-card" style={{position:'relative', padding:'14px 16px', border:'1px solid var(--rule)', borderRadius:12, background:'oklch(0.97 0.018 82)'}}>
             <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:6}}>
               <span style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', color:'var(--ink-faint)'}}>{n.date}</span>
-              <Pill tone={n.tag === 'болезнь' ? 'berry' : n.tag === 'программа' ? 'ochre' : 'green'}>{n.tag}</Pill>
+              <div style={{display:'flex', alignItems:'center', gap:8}}>
+                <Pill tone={n.tag === 'болезнь' ? 'berry' : n.tag === 'программа' ? 'ochre' : 'green'}>{n.tag}</Pill>
+                <button onClick={() => beginEdit(i)} title="Редактировать" style={{
+                  width:24, height:24, padding:0, display:'grid', placeItems:'center', cursor:'pointer',
+                  border:'none', background:'transparent', color:'var(--ink-faint)', borderRadius:6,
+                }} onMouseEnter={e => e.currentTarget.style.color='var(--forest)'} onMouseLeave={e => e.currentTarget.style.color='var(--ink-faint)'}>
+                  <Icon name="edit" size={13}/>
+                </button>
+                <button onClick={() => remove(i)} title="Удалить" style={{
+                  width:24, height:24, padding:0, display:'grid', placeItems:'center', cursor:'pointer',
+                  border:'none', background:'transparent', color:'var(--ink-faint)', borderRadius:6,
+                }} onMouseEnter={e => e.currentTarget.style.color='var(--berry)'} onMouseLeave={e => e.currentTarget.style.color='var(--ink-faint)'}>
+                  <Icon name="x" size={13}/>
+                </button>
+              </div>
             </div>
             <div className="font-serif italic" style={{fontSize:16, lineHeight:1.45, color:'var(--ink)'}}>{n.text}</div>
           </div>
