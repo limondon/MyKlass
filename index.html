@@ -1900,6 +1900,21 @@ window.MK_DATA = {
   alerts: [],
 };
 
+// ── Lesson statuses (used by per-student & by group bulk conduct UIs) ──
+window.MK_LESSON_LABELS = {
+  future: 'Запланировано', done: 'Проведено', transfer: 'Отработка',
+  sick: 'Перенос', 'sick-wait': 'Жду справку', freeze: 'Заморожено', refund: 'Возврат'
+};
+window.MK_LESSON_STATUSES = [
+  { k:'done',      label:'✓ Проведено',              color:'var(--forest)' },
+  { k:'future',    label:'○ Запланировано',          color:'var(--ink-faint)' },
+  { k:'transfer',  label:'↪ Отработка',              color:'var(--ochre-deep)' },
+  { k:'sick-wait', label:'🤒 Болезнь — жду справку', color:'var(--ochre-deep)' },
+  { k:'sick',      label:'📋 Болезнь — перенос',     color:'var(--ochre-deep)' },
+  { k:'freeze',    label:'❄ Заморожено',             color:'var(--sky)' },
+  { k:'refund',    label:'↩ Возврат',                color:'var(--berry)' },
+];
+
 // ── Schedule overrides (per-date cancellations + extra lessons) ──
 const MK_OVR_KEY = 'mk.schedule.overrides';
 window.MK_SCHEDULE = (() => {
@@ -2606,6 +2621,133 @@ const AppProvider = ({ value, children }) => (
   <AppCtx.Provider value={value}>{children}</AppCtx.Provider>
 );
 
+// ---------- Lesson roster (bulk conduct UI) ----------
+// Used inside LessonDetailSheet (per-lesson) and GroupSheet (per-group)
+// For each student: shows their next "future" lesson + 7 status chips + comment input.
+// Save batches updates through window.MK_STORE.updateStudent.
+const _LR_initials = (name) => name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
+const LessonRoster = ({ rosterStudents, notify }) => {
+  const [drafts, setDrafts] = React.useState({}); // {sid: {status, note}}
+  const STATUSES = window.MK_LESSON_STATUSES;
+  const LABELS = window.MK_LESSON_LABELS;
+
+  const update = (sid, patch) => setDrafts(d => ({ ...d, [sid]: { ...d[sid], ...patch } }));
+
+  const apply = () => {
+    let saved = 0;
+    for (const st of rosterStudents) {
+      const draft = drafts[st.id];
+      if (!draft || !draft.status) continue;
+      const stored = window.MK_STORE.getStudent(st.id);
+      if (!stored || !stored.lessons || !stored.lessons.length) continue;
+      const idx = stored.lessons.findIndex(l => l.status === 'future');
+      if (idx < 0) continue;
+      const lessons = [...stored.lessons];
+      lessons[idx] = { ...lessons[idx], status: draft.status, note: draft.note || '' };
+      const events = [...(stored.events || []), {
+        type: draft.status,
+        date: new Date().toLocaleDateString('ru-RU'),
+        note: `${LABELS[draft.status] || draft.status} (${lessons[idx].date})${draft.note ? ' → ' + draft.note : ''}`
+      }];
+      window.MK_STORE.updateStudent(st.id, s => ({ ...s, lessons, events }));
+      saved++;
+    }
+    setDrafts({});
+    if (saved === 0) {
+      notify && notify('Выберите статус хотя бы у одного ученика');
+    } else {
+      const word = saved === 1 ? 'ученик' : (saved >= 2 && saved <= 4) ? 'ученика' : 'учеников';
+      notify && notify(`Проводка сохранена: ${saved} ${word}`);
+    }
+  };
+
+  const draftCount = Object.values(drafts).filter(d => d && d.status).length;
+
+  return (
+    <div style={{borderTop:'1px dashed var(--rule)', paddingTop:18, marginTop:18}}>
+      <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:14}}>
+        <h3 style={{fontFamily:'Instrument Serif', fontSize:22, margin:0}}>Проводка <em style={{color:'var(--forest)'}}>занятия</em></h3>
+        <span style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', color:'var(--ink-faint)', textTransform:'uppercase'}}>
+          {draftCount > 0 ? `выбрано: ${draftCount}` : 'отметьте за всех'}
+        </span>
+      </div>
+
+      <div style={{display:'flex', flexDirection:'column', gap:14}}>
+        {rosterStudents.map(st => {
+          const stored = window.MK_STORE.getStudent(st.id) || st;
+          const lessons = stored.lessons || [];
+          const nextIdx = lessons.findIndex(l => l.status === 'future');
+          const next = nextIdx >= 0 ? lessons[nextIdx] : null;
+          const draft = drafts[st.id] || {};
+          const noLessons = !next;
+          return (
+            <div key={st.id} style={{
+              padding:'12px 14px', border:'1px solid var(--rule)', borderRadius:12,
+              background: draft.status ? 'var(--moss-pale)' : 'var(--paper-card)',
+              transition:'background .15s',
+            }}>
+              <div style={{display:'flex', alignItems:'center', gap:12, marginBottom: noLessons ? 0 : 10}}>
+                <div className="av" style={{color: st.spine, width:36, height:36, fontSize:13}}>{_LR_initials(st.name)}</div>
+                <div style={{flex:1, minWidth:0}}>
+                  <div style={{fontSize:14, fontWeight:600}}>{st.name}</div>
+                  <div style={{fontFamily:'JetBrains Mono', fontSize:10, color:'var(--ink-faint)', letterSpacing:'.08em', marginTop:2}}>
+                    {next ? `СЛОТ ${next.date} · ТЕКУЩИЙ: ${LABELS[next.status] || next.status}` : 'АБОНЕМЕНТ ЗАКОНЧЕН'}
+                  </div>
+                </div>
+              </div>
+
+              {!noLessons && (
+                <>
+                  <div style={{display:'flex', flexWrap:'wrap', gap:5}}>
+                    {STATUSES.map(s => {
+                      const on = draft.status === s.k;
+                      return (
+                        <button
+                          key={s.k}
+                          onClick={() => update(st.id, { status: on ? undefined : s.k })}
+                          title={s.label}
+                          style={{
+                            padding:'5px 10px', borderRadius:999, fontSize:11.5, cursor:'pointer',
+                            border:'1px solid ' + (on ? s.color : 'var(--rule)'),
+                            background: on ? s.color : 'transparent',
+                            color: on ? 'oklch(0.97 0.02 85)' : s.color,
+                            fontFamily:'Manrope, sans-serif', fontWeight: on ? 600 : 500,
+                            transition:'all .12s',
+                          }}
+                        >{s.label}</button>
+                      );
+                    })}
+                  </div>
+                  {draft.status && (
+                    <input
+                      value={draft.note || ''}
+                      onChange={e => update(st.id, { note: e.target.value })}
+                      placeholder="комментарий (необязательно) — напр. отработка 23.05"
+                      style={{
+                        width:'100%', marginTop:10, padding:'8px 11px', border:'1px solid var(--rule)',
+                        borderRadius:8, fontFamily:'Manrope', fontSize:12.5, outline:'none',
+                        background:'var(--paper-deep)', color:'var(--ink)',
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{display:'flex', justifyContent:'flex-end', marginTop:14}}>
+        <button className="btn btn-sm btn-primary" onClick={apply} disabled={draftCount === 0}
+          style={{opacity: draftCount === 0 ? 0.5 : 1}}>
+          <Icon name="check" size={13}/> Сохранить проводку{draftCount > 0 ? ` · ${draftCount}` : ''}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // ---------- Sheet shell ----------
 const Sheet = ({ eyebrow, title, titleEm, onClose, foot, children }) => {
   React.useEffect(() => {
@@ -2734,6 +2876,9 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
   const fmt = (h) => `${Math.floor(h).toString().padStart(2,'0')}:${((h%1)*60).toString().padStart(2,'0')}`;
   const canToggle = lesson.date && lesson.id;
   const isCancelled = canToggle ? window.MK_SCHEDULE.isCancelled(lesson.date, lesson.id) : !!lesson.canceled;
+  const roster = lesson.group
+    ? students.filter(s => s.groupId === lesson.groupId)
+    : (entity ? [entity] : []);
 
   return (
     <Sheet
@@ -2780,12 +2925,9 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
           {isCancelled ? <Pill tone="berry" dot>отменён</Pill> : <Pill tone="green" dot>в плане</Pill>}
         </div>
       </div>
-      <div className="kv-row">
-        <div className="k">Заметка</div>
-        <div className="v font-serif italic" style={{fontSize: 17, color: 'var(--ink-soft)'}}>
-          Подготовить раздаточный материал, разогрев — 5 мин.
-        </div>
-      </div>
+      {!isCancelled && roster.length > 0 && (
+        <LessonRoster rosterStudents={roster} notify={notify} />
+      )}
     </Sheet>
   );
 };
@@ -3117,6 +3259,7 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
             ))}
           </div>
         </div>
+        {roster.length > 0 && <LessonRoster rosterStudents={roster} notify={notify} />}
       </Sheet>
     );
   }
@@ -3742,20 +3885,8 @@ const updateSubData = (sid, updater) => {
   return updated;
 };
 
-const MK_LESSON_LABELS = {
-  future: 'Запланировано', done: 'Проведено', transfer: 'Отработка',
-  sick: 'Перенос', 'sick-wait': 'Жду справку', freeze: 'Заморожено', refund: 'Возврат'
-};
-
-const MK_LESSON_STATUSES = [
-  { k:'done',      label:'✓ Проведено',            color:'var(--forest)' },
-  { k:'future',    label:'○ Запланировано',          color:'var(--ink-faint)' },
-  { k:'transfer',  label:'↪ Отработка',              color:'var(--ochre-deep)' },
-  { k:'sick-wait', label:'🤒 Болезнь — жду справку', color:'var(--ochre-deep)' },
-  { k:'sick',      label:'📋 Болезнь — перенос',     color:'var(--ochre-deep)' },
-  { k:'freeze',    label:'❄ Заморожено',             color:'var(--sky)' },
-  { k:'refund',    label:'↩ Возврат',                color:'var(--berry)' },
-];
+const MK_LESSON_LABELS = window.MK_LESSON_LABELS;
+const MK_LESSON_STATUSES = window.MK_LESSON_STATUSES;
 
 const hasCrossMk = (st) => ['transfer','sick','sick-wait','freeze','refund'].includes(st);
 
