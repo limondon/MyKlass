@@ -4735,7 +4735,7 @@ const OverviewPane = ({ s, left, openSheet, notify, skillsStore }) => {
         <h3>Родитель <em>и контакты</em></h3>
         <span className="tag">основной</span>
       </div>
-      <ParentBlock s={s} openSheet={openSheet} />
+      <ParentBlock s={s} openSheet={openSheet} notify={notify} />
 
       {_lastNote ? (
         <>
@@ -5356,21 +5356,54 @@ const SkillBars = ({ s }) => (
   </div>
 );
 
-const ParentBlock = ({ s, openSheet }) => (
-  <div style={{display:'flex', flexDirection:'column', gap:10}}>
-    <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'var(--paper-deep)', borderRadius:10}}>
-      <div style={{width:36, height:36, borderRadius:'50%', background:'var(--ochre-pale)', color:'var(--ochre-deep)', display:'grid', placeItems:'center', fontFamily:'Instrument Serif', fontStyle:'italic', fontSize:16}}>{Initials(s.parent)}</div>
-      <div style={{flex:1}}>
-        <div style={{fontWeight:600, fontSize:13.5}}>{s.parent}</div>
-        <div style={{fontFamily:'JetBrains Mono', fontSize:11, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{s.phone}</div>
+const ParentBlock = ({ s, openSheet, notify }) => {
+  const shareLink = async () => {
+    const base = window.location.origin + window.location.pathname;
+    const url = base + '?parent=' + s.id;
+    const fallback = () => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(
+          () => notify && notify('Ссылка скопирована — отправьте её родителю', 'ok'),
+          () => prompt('Скопируйте ссылку вручную:', url)
+        );
+      } else {
+        prompt('Скопируйте ссылку вручную:', url);
+      }
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `МойКласс · ${s.name}`,
+          text: `Карточка ученика «${s.name}» — посмотрите остаток пакета и историю событий.`,
+          url,
+        });
+        notify && notify('Ссылка отправлена', 'ok');
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+        fallback();
+        return;
+      }
+    }
+    fallback();
+  };
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:10}}>
+      <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'var(--paper-deep)', borderRadius:10}}>
+        <div style={{width:36, height:36, borderRadius:'50%', background:'var(--ochre-pale)', color:'var(--ochre-deep)', display:'grid', placeItems:'center', fontFamily:'Instrument Serif', fontStyle:'italic', fontSize:16}}>{Initials(s.parent)}</div>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:600, fontSize:13.5}}>{s.parent}</div>
+          <div style={{fontFamily:'JetBrains Mono', fontSize:11, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{s.phone}</div>
+        </div>
+        <button className="icon-btn" onClick={() => openSheet && openSheet('contact', { student: s })} aria-label="Связь"><Icon name="phone" size={14}/></button>
       </div>
-      <button className="icon-btn" onClick={() => openSheet && openSheet('contact', { student: s })} aria-label="Связь"><Icon name="phone" size={14}/></button>
+      <button className="btn" onClick={shareLink} style={{justifyContent:'center', cursor:'pointer'}}>
+        <Icon name="share" size={14}/> Поделиться ссылкой на карточку
+      </button>
     </div>
-    <a className="btn" href="parent-card.html" target="_blank" rel="noopener" style={{textDecoration:'none', color:'inherit', justifyContent:'center'}}>
-      <Icon name="share" size={14}/> Поделиться ссылкой на карточку
-    </a>
-  </div>
-);
+  );
+};
 
 const Timeline = () => (
   <div className="timeline">
