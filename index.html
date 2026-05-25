@@ -2117,7 +2117,20 @@ window.MK_SCHEDULE = (() => {
         });
       }
     }
-    return [...staticT, ...fromGroups];
+    // Фильтруем staticT: убираем индивидуальные слоты ученика, если у его группы
+    // есть собрание в это же время (иначе будут дубли — ученик в группе И отдельно)
+    const allSlots = [...staticT, ...fromGroups];
+    const filteredStatic = staticT.filter(b => {
+      if (b.group || !b.studentId) return true;
+      const student = (window.MK_STORE?.students || []).find(s => s.id === b.studentId);
+      if (!student || !student.groupId) return true;
+      const groupHasSlot = allSlots.some(gb =>
+        gb.group && gb.groupId === student.groupId
+          && gb.day === b.day && Math.abs(gb.start - b.start) < 0.05
+      );
+      return !groupHasSlot;
+    });
+    return [...filteredStatic, ...fromGroups];
   };
 
   return {
