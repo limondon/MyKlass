@@ -1761,18 +1761,115 @@ const MK_LS_KEY = 'mk_store_v1';
 const DEMO_STUDENTS = (() => {
   const spines = ['#1F3A2E','#9B6B2F','#7A4A2E','#3E5F4B','#2C5F77','#5A4B7C','#8C4A4A','#6B6024','#4A6B3E','#7C5A2E','#3D4F7A','#5E3D6B'];
   return [
-    { id:'s1',  name:'Лиза Морозова',   short:'Лиза М.',  age:6, groupId:'g1', pack:8,  used:7, parent:'Ольга Морозова',    phone:'+7 916 200 14 22', joined:'Сен 2024', spine:spines[0],  scores:{Чтение:78,Математика:64,Письмо:52,Логика:81}, notes:'Очень любопытная, тянется к чтению. Дома мало читает вслух.', days:[1,3,5], time:'09:00', price:9600, paid:'2025-04-04', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:8},(_,i)=>({date:`0${i+1}.05`,status:i<7?'done':'future',note:''})), events:[{type:'payment',date:'04.04.2025',note:'Оплата, 8 занятий — 9 600 ₽'}] },
-    { id:'s2',  name:'Артём Соколов',   short:'Артём С.', age:5, groupId:'g1', pack:6,  used:2, parent:'Мария Соколова',    phone:'+7 925 411 09 03', joined:'Окт 2024', spine:spines[1],  scores:{Чтение:42,Математика:58,Письмо:38,Логика:49}, notes:'', days:[1,3,5], time:'09:00', price:7200, paid:'2025-05-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:6},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<2?'done':'future',note:''})), events:[{type:'payment',date:'01.05.2025',note:'Оплата, 6 занятий — 7 200 ₽'}] },
-    { id:'s3',  name:'Маша Иванова',    short:'Маша И.',  age:7, groupId:'g2', pack:8,  used:4, parent:'Анна Иванова',      phone:'+7 903 822 51 30', joined:'Сен 2024', spine:spines[2],  scores:{Чтение:88,Математика:79,Письмо:71,Логика:84}, notes:'', days:[2,4], time:'14:00', price:9600, paid:'2025-05-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:8},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<4?'done':'future',note:''})), events:[{type:'payment',date:'01.05.2025',note:'Оплата, 8 занятий — 9 600 ₽'}] },
-    { id:'s4',  name:'Даня Петров',     short:'Даня П.',  age:6, groupId:'g3', pack:6,  used:6, parent:'Игорь Петров',      phone:'+7 985 113 76 41', joined:'Сен 2024', spine:spines[3],  scores:{Чтение:64,Математика:71,Письмо:60,Логика:68}, notes:'', days:[1,3], time:'16:00', price:7200, paid:'2025-04-01', freezeUsed:0, freezeMax:3, status:'ended',  lessons:Array.from({length:6},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.04`,status:'done',note:''})), events:[{type:'payment',date:'01.04.2025',note:'Оплата, 6 занятий — 7 200 ₽'}] },
-    { id:'s5',  name:'Соня Кузнецова',  short:'Соня К.',  age:5, groupId:'g1', pack:4,  used:1, parent:'Татьяна Кузнецова', phone:'+7 916 543 11 09', joined:'Ноя 2024', spine:spines[4],  scores:{Чтение:35,Математика:41,Письмо:28,Логика:39}, notes:'', days:[1,3,5], time:'09:00', price:4800, paid:'2025-05-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:4},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<1?'done':'future',note:''})), events:[{type:'payment',date:'01.05.2025',note:'Оплата, 4 занятия — 4 800 ₽'}] },
-    { id:'s6',  name:'Тимофей Зайцев',  short:'Тима З.',  age:6, groupId:'g4', pack:8,  used:3, parent:'Елена Зайцева',    phone:'+7 926 088 23 17', joined:'Сен 2024', spine:spines[5],  scores:{Чтение:56,Математика:82,Письмо:49,Логика:76}, notes:'', days:[6], time:'11:00', price:9600, paid:'2025-05-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:8},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<3?'done':'future',note:''})), events:[{type:'payment',date:'01.05.2025',note:'Оплата, 8 занятий — 9 600 ₽'}] },
-    { id:'s7',  name:'Полина Орлова',   short:'Поля О.',  age:7, groupId:'g2', pack:6,  used:5, parent:'Светлана Орлова',  phone:'+7 916 765 41 02', joined:'Авг 2024', spine:spines[6],  scores:{Чтение:92,Математика:86,Письмо:88,Логика:90}, notes:'', days:[2,4], time:'14:00', price:7200, paid:'2025-04-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:6},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<5?'done':'future',note:''})), events:[{type:'payment',date:'01.04.2025',note:'Оплата, 6 занятий — 7 200 ₽'}] },
-    { id:'s8',  name:'Миша Васильев',   short:'Миша В.',  age:5, groupId:'g5', pack:8,  used:8, parent:'Дмитрий Васильев', phone:'+7 903 219 60 75', joined:'Окт 2024', spine:spines[7],  scores:{Чтение:51,Математика:60,Письмо:44,Логика:55}, notes:'', days:[2,6], time:'11:00', price:9600, paid:'2025-04-01', freezeUsed:0, freezeMax:3, status:'ended',  lessons:Array.from({length:8},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.04`,status:'done',note:''})), events:[{type:'payment',date:'01.04.2025',note:'Оплата, 8 занятий — 9 600 ₽'}] },
-    { id:'s9',  name:'Кира Новикова',   short:'Кира Н.',  age:6, groupId:'g3', pack:6,  used:3, parent:'Алина Новикова',   phone:'+7 925 332 18 04', joined:'Сен 2024', spine:spines[8],  scores:{Чтение:73,Математика:65,Письмо:70,Логика:72}, notes:'', days:[1,3], time:'16:00', price:7200, paid:'2025-05-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:6},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<3?'done':'future',note:''})), events:[{type:'payment',date:'01.05.2025',note:'Оплата, 6 занятий — 7 200 ₽'}] },
-    { id:'s10', name:'Гриша Смирнов',   short:'Гриша С.', age:7, groupId:'g2', pack:4,  used:2, parent:'Наталья Смирнова', phone:'+7 916 045 99 12', joined:'Янв 2025', spine:spines[9],  scores:{Чтение:60,Математика:78,Письмо:55,Логика:70}, notes:'', days:[2,4], time:'14:00', price:4800, paid:'2025-05-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:4},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<2?'done':'future',note:''})), events:[{type:'payment',date:'01.05.2025',note:'Оплата, 4 занятия — 4 800 ₽'}] },
-    { id:'s11', name:'Алиса Романова',  short:'Алиса Р.', age:6, groupId:'g1', pack:8,  used:5, parent:'Юлия Романова',    phone:'+7 926 711 23 88', joined:'Сен 2024', spine:spines[10], scores:{Чтение:80,Математика:72,Письмо:76,Логика:78}, notes:'', days:[1,3,5], time:'09:00', price:9600, paid:'2025-04-15', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:8},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<5?'done':'future',note:''})), events:[{type:'payment',date:'15.04.2025',note:'Оплата, 8 занятий — 9 600 ₽'}] },
-    { id:'s12', name:'Лев Фёдоров',     short:'Лёва Ф.',  age:5, groupId:'g5', pack:6,  used:4, parent:'Кирилл Фёдоров',  phone:'+7 903 555 24 16', joined:'Ноя 2024', spine:spines[11], scores:{Чтение:47,Математика:53,Письмо:41,Логика:48}, notes:'', days:[2,5], time:'09:00', price:7200, paid:'2025-04-01', freezeUsed:0, freezeMax:3, status:'active', lessons:Array.from({length:6},(_,i)=>({date:`${String(i+1).padStart(2,'0')}.05`,status:i<4?'done':'future',note:''})), events:[{type:'payment',date:'01.04.2025',note:'Оплата, 6 занятий — 7 200 ₽'}] },
+    // s1 Лиза — середина пакета, активный, есть заметка
+    { id:'s1',  name:'Лиза Морозова',   short:'Лиза М.',  age:6, groupId:'g1', pack:8,  used:4, parent:'Ольга Морозова',    phone:'+7 916 200 14 22', joined:'Сен 2025', spine:spines[0],  scores:{Чтение:78,Математика:64,Письмо:52,Логика:81}, notes:'Очень любопытная, тянется к чтению. Дома мало читает вслух.', days:[1,3,5], time:'09:00', price:9600, paid:'04.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'04.05',status:'done',note:''},{date:'06.05',status:'done',note:''},{date:'08.05',status:'done',note:''},{date:'11.05',status:'done',note:''},
+      {date:'13.05',status:'future',note:''},{date:'15.05',status:'future',note:''},{date:'18.05',status:'future',note:''},{date:'20.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'04.05.2026',note:'Оплата · 8 занятий — 9 600 ₽ · СБП'}
+    ], notesList:[
+      {date:'13 МАЯ', tag:'наблюдение', text:'Дочитала Букварь до буквы Я. Идём к коротким текстам вслух.'}
+    ] },
+
+    // s2 Артём — только начал новый пакет, был перенос по болезни
+    { id:'s2',  name:'Артём Соколов',   short:'Артём С.', age:5, groupId:'g1', pack:6,  used:1, parent:'Мария Соколова',    phone:'+7 925 411 09 03', joined:'Окт 2025', spine:spines[1],  scores:{Чтение:42,Математика:58,Письмо:38,Логика:49}, notes:'', days:[1,3,5], time:'09:00', price:7200, paid:'11.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'11.05',status:'done',note:''},
+      {date:'13.05',status:'sick-wait',note:'болеет, ждём справку'},
+      {date:'15.05',status:'future',note:''},{date:'18.05',status:'future',note:''},{date:'20.05',status:'future',note:''},{date:'22.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'11.05.2026',note:'Оплата · 6 занятий — 7 200 ₽ · СБП'},
+      {type:'sick-wait',date:'13.05.2026',note:'Жду справку (13.05)'}
+    ] },
+
+    // s3 Маша — заканчивает пакет, есть заметка
+    { id:'s3',  name:'Маша Иванова',    short:'Маша И.',  age:7, groupId:'g2', pack:8,  used:5, parent:'Анна Иванова',      phone:'+7 903 822 51 30', joined:'Сен 2025', spine:spines[2],  scores:{Чтение:88,Математика:79,Письмо:71,Логика:84}, notes:'', days:[2,4], time:'14:00', price:9600, paid:'05.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'05.05',status:'done',note:''},{date:'07.05',status:'done',note:''},{date:'12.05',status:'done',note:''},{date:'14.05',status:'done',note:''},{date:'19.05',status:'done',note:''},
+      {date:'21.05',status:'future',note:''},{date:'26.05',status:'future',note:''},{date:'28.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'05.05.2026',note:'Оплата · 8 занятий — 9 600 ₽ · Карта'}
+    ], notesList:[
+      {date:'14 МАЯ', tag:'наблюдение', text:'Сильная по математике. Можно давать задачи на класс выше.'}
+    ] },
+
+    // s4 Даня — пакет закрыт месяц назад, ждёт нового
+    { id:'s4',  name:'Даня Петров',     short:'Даня П.',  age:6, groupId:'g3', pack:6,  used:6, parent:'Игорь Петров',      phone:'+7 985 113 76 41', joined:'Сен 2025', spine:spines[3],  scores:{Чтение:64,Математика:71,Письмо:60,Логика:68}, notes:'', days:[1,3], time:'16:00', price:7200, paid:'06.04.2026', freezeUsed:0, freezeMax:3, status:'ended',  lessons:[
+      {date:'06.04',status:'done',note:''},{date:'08.04',status:'done',note:''},{date:'13.04',status:'done',note:''},{date:'15.04',status:'done',note:''},{date:'20.04',status:'done',note:''},{date:'22.04',status:'done',note:''}
+    ], events:[
+      {type:'payment',date:'06.04.2026',note:'Оплата · 6 занятий — 7 200 ₽ · Карта'}
+    ] },
+
+    // s5 Соня — недавно записалась, маленький пакет
+    { id:'s5',  name:'Соня Кузнецова',  short:'Соня К.',  age:5, groupId:'g1', pack:4,  used:1, parent:'Татьяна Кузнецова', phone:'+7 916 543 11 09', joined:'Ноя 2025', spine:spines[4],  scores:{Чтение:35,Математика:41,Письмо:28,Логика:39}, notes:'', days:[1,3,5], time:'09:00', price:4800, paid:'22.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'22.05',status:'done',note:''},
+      {date:'25.05',status:'future',note:''},{date:'27.05',status:'future',note:''},{date:'29.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'22.05.2026',note:'Оплата · 4 занятия — 4 800 ₽ · СБП'}
+    ] },
+
+    // s6 Тима — суббота, наличные, использовал заморозку
+    { id:'s6',  name:'Тимофей Зайцев',  short:'Тима З.',  age:6, groupId:'g4', pack:8,  used:5, parent:'Елена Зайцева',    phone:'+7 926 088 23 17', joined:'Сен 2025', spine:spines[5],  scores:{Чтение:56,Математика:82,Письмо:49,Логика:76}, notes:'', days:[6], time:'11:00', price:9600, paid:'18.04.2026', freezeUsed:1, freezeMax:3, status:'active', lessons:[
+      {date:'18.04',status:'done',note:''},{date:'25.04',status:'done',note:''},
+      {date:'02.05',status:'freeze',note:'отпуск 1 неделя'},
+      {date:'09.05',status:'done',note:''},{date:'16.05',status:'done',note:''},{date:'23.05',status:'done',note:''},
+      {date:'30.05',status:'future',note:''},{date:'06.06',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'18.04.2026',note:'Оплата · 8 занятий — 9 600 ₽ · Наличные'},
+      {type:'freeze',date:'02.05.2026',note:'Заморожено (02.05)'}
+    ] },
+
+    // s7 Поля — пакет почти закончен, в зоне алертов
+    { id:'s7',  name:'Полина Орлова',   short:'Поля О.',  age:7, groupId:'g2', pack:6,  used:5, parent:'Светлана Орлова',  phone:'+7 916 765 41 02', joined:'Авг 2025', spine:spines[6],  scores:{Чтение:92,Математика:86,Письмо:88,Логика:90}, notes:'', days:[2,4], time:'14:00', price:7200, paid:'28.04.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'28.04',status:'done',note:''},{date:'30.04',status:'done',note:''},{date:'05.05',status:'done',note:''},{date:'07.05',status:'done',note:''},{date:'12.05',status:'done',note:''},
+      {date:'14.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'28.04.2026',note:'Оплата · 6 занятий — 7 200 ₽ · СБП'}
+    ], notesList:[
+      {date:'12 МАЯ', tag:'программа', text:'Сильная ученица, скоро перейдём на программу для 1 класса.'}
+    ] },
+
+    // s8 Миша — индивидуальные, пакет закрыт, нужно продлевать
+    { id:'s8',  name:'Миша Васильев',   short:'Миша В.',  age:5, groupId:'g5', pack:8,  used:8, parent:'Дмитрий Васильев', phone:'+7 903 219 60 75', joined:'Окт 2025', spine:spines[7],  scores:{Чтение:51,Математика:60,Письмо:44,Логика:55}, notes:'', days:[2,6], time:'11:00', price:9600, paid:'01.04.2026', freezeUsed:0, freezeMax:3, status:'ended',  lessons:[
+      {date:'01.04',status:'done',note:''},{date:'05.04',status:'done',note:''},{date:'08.04',status:'done',note:''},{date:'12.04',status:'done',note:''},{date:'15.04',status:'done',note:''},{date:'19.04',status:'done',note:''},{date:'22.04',status:'done',note:''},{date:'26.04',status:'done',note:''}
+    ], events:[
+      {type:'payment',date:'01.04.2026',note:'Оплата · 8 занятий — 12 800 ₽ · Карта'}
+    ] },
+
+    // s9 Кира — был перенос, новый абонемент
+    { id:'s9',  name:'Кира Новикова',   short:'Кира Н.',  age:6, groupId:'g3', pack:6,  used:2, parent:'Алина Новикова',   phone:'+7 925 332 18 04', joined:'Сен 2025', spine:spines[8],  scores:{Чтение:73,Математика:65,Письмо:70,Логика:72}, notes:'', days:[1,3], time:'16:00', price:7200, paid:'04.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'04.05',status:'done',note:''},{date:'06.05',status:'done',note:''},
+      {date:'11.05',status:'sick',note:'перенос на 13.05'},
+      {date:'13.05',status:'transfer',note:'отработка пропуска 11.05'},
+      {date:'18.05',status:'future',note:''},{date:'20.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'04.05.2026',note:'Оплата · 6 занятий — 7 200 ₽ · СБП'},
+      {type:'sick',date:'11.05.2026',note:'Болезнь — перенос (11.05)'},
+      {type:'transfer',date:'13.05.2026',note:'Отработка (13.05) → 11.05'}
+    ] },
+
+    // s10 Гриша — недавно начал, маленький пакет
+    { id:'s10', name:'Гриша Смирнов',   short:'Гриша С.', age:7, groupId:'g2', pack:4,  used:2, parent:'Наталья Смирнова', phone:'+7 916 045 99 12', joined:'Янв 2026', spine:spines[9],  scores:{Чтение:60,Математика:78,Письмо:55,Логика:70}, notes:'', days:[2,4], time:'14:00', price:4800, paid:'12.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'12.05',status:'done',note:''},{date:'14.05',status:'done',note:''},
+      {date:'19.05',status:'future',note:''},{date:'21.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'12.05.2026',note:'Оплата · 4 занятия — 6 400 ₽ · СБП'}
+    ] },
+
+    // s11 Алиса — ОЖИДАЕТ оплату (демо для payment-pending)
+    { id:'s11', name:'Алиса Романова',  short:'Алиса Р.', age:6, groupId:'g1', pack:8,  used:5, parent:'Юлия Романова',    phone:'+7 926 711 23 88', joined:'Сен 2025', spine:spines[10], scores:{Чтение:80,Математика:72,Письмо:76,Логика:78}, notes:'', days:[1,3,5], time:'09:00', price:9600, paid:'04.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'04.05',status:'done',note:''},{date:'06.05',status:'done',note:''},{date:'08.05',status:'done',note:''},{date:'11.05',status:'done',note:''},{date:'13.05',status:'done',note:''},
+      {date:'15.05',status:'future',note:''},{date:'18.05',status:'future',note:''},{date:'20.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'04.05.2026',note:'Оплата · 8 занятий — 9 600 ₽ · Карта'},
+      {type:'payment-pending',date:'25.05.2026',note:'Ждёт оплаты · 8 занятий — 9 600 ₽'}
+    ] },
+
+    // s12 Лёва — индивид., пакет до конца мая
+    { id:'s12', name:'Лев Фёдоров',     short:'Лёва Ф.',  age:5, groupId:'g5', pack:6,  used:3, parent:'Кирилл Фёдоров',  phone:'+7 903 555 24 16', joined:'Ноя 2025', spine:spines[11], scores:{Чтение:47,Математика:53,Письмо:41,Логика:48}, notes:'', days:[2,5], time:'09:00', price:7200, paid:'01.05.2026', freezeUsed:0, freezeMax:3, status:'active', lessons:[
+      {date:'01.05',status:'done',note:''},{date:'05.05',status:'done',note:''},{date:'08.05',status:'done',note:''},
+      {date:'12.05',status:'future',note:''},{date:'15.05',status:'future',note:''},{date:'19.05',status:'future',note:''}
+    ], events:[
+      {type:'payment',date:'01.05.2026',note:'Оплата · 6 занятий — 7 200 ₽ · Наличные'}
+    ] },
   ];
 })();
 
