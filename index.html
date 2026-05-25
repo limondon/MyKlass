@@ -5231,6 +5231,19 @@ const PaymentsPane = ({ s, left, openSheet, notify }) => {
     notify && notify('Платёж удалён', 'ok');
   };
 
+  const resetPack = () => {
+    if (!window.confirm('Сбросить текущий пакет ученика? Все слоты текущего пакета будут удалены, история событий останется.')) return;
+    const oldDone = (stored.lessons || []).filter(l => l.status === 'done');
+    window.MK_STORE.updateStudent(s.id, st => ({
+      ...st,
+      lessons: [],
+      pack: 0,
+      used: 0,
+      archivedLessons: [...(st.archivedLessons || []), ...oldDone],
+    }));
+    notify && notify('Пакет сброшен — нажмите Продлить чтобы начать новый', 'ok');
+  };
+
   return (
   <>
     <div className="profile-section">
@@ -5239,6 +5252,20 @@ const PaymentsPane = ({ s, left, openSheet, notify }) => {
         <span className="tag">{sorted.length > 0 ? `№ ${packNumber}` : 'нет платежей'}</span>
       </div>
       <PackCard s={s} left={left} openSheet={openSheet} />
+      {(s.pack || 0) > 0 && (
+        <div style={{marginTop:10, textAlign:'right'}}>
+          <button onClick={resetPack} style={{
+            border:'none', background:'transparent', cursor:'pointer',
+            fontSize:11.5, color:'var(--ink-faint)', fontFamily:'Manrope',
+            padding:'4px 8px', borderRadius:6,
+          }}
+            onMouseEnter={e => e.currentTarget.style.color='var(--berry)'}
+            onMouseLeave={e => e.currentTarget.style.color='var(--ink-faint)'}
+          >
+            что-то не так с пакетом? сбросить и начать заново
+          </button>
+        </div>
+      )}
     </div>
     <div className="profile-section">
       <div className="section-h">
