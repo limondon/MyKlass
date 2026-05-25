@@ -4034,27 +4034,6 @@ const Dashboard = ({ goTo }) => {
   const _waitlist = 0; // нет данных о листе ожидания
 
   const monthIncome = _curPayments.sum;
-  /* eslint-disable */ const _unused_monthIncomeOld = false && (() => {
-    const targetMonth = _now.getMonth();
-    const targetYear = _now.getFullYear();
-    let sum = 0;
-    for (const s of students) {
-      for (const e of (s.events || [])) {
-        if (e.type !== 'payment') continue;
-        // дата формата "ДД.ММ.ГГГГ"
-        const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
-        if (!m) continue;
-        const month = parseInt(m[2], 10) - 1;
-        const year = parseInt(m[3], 10);
-        if (month !== targetMonth || year !== targetYear) continue;
-        // вытаскиваем рубли из note: "Оплата, 8 занятий — 9 600 ₽"
-        const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
-        if (rub) sum += parseInt(rub[1].replace(/[\s ]/g, ''), 10) || 0;
-        else sum += s.price || 0;
-      }
-    }
-    return sum;
-  })();
 
   return (
     <div className="content">
