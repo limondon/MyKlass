@@ -3141,17 +3141,30 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
             <Icon name="check" size={13}/> Перенести
           </button>
         </>
-      ) : (
+      ) : (() => {
+        const isExtra = String(lesson.id || '').startsWith('e_');
+        return (
         <>
-          <button className="btn btn-sm" onClick={() => {
-            if (canToggle) {
-              window.MK_SCHEDULE.toggleCancel(lesson.date, lesson.id);
-              notify(isCancelled ? 'Урок восстановлен' : 'Урок отменён на эту дату', 'ok');
-            } else {
-              notify('Урок отменён', 'ok');
-            }
-            onClose();
-          }}>{isCancelled ? 'Восстановить' : 'Отменить'}</button>
+          {isExtra ? (
+            <button className="btn btn-sm" onClick={() => {
+              if (!window.confirm('Удалить этот урок совсем? Восстановить нельзя будет.')) return;
+              window.MK_SCHEDULE.removeExtra(lesson.date, lesson.id);
+              notify('Урок удалён', 'ok');
+              onClose();
+            }} style={{color:'var(--berry)'}}>
+              <Icon name="x" size={13}/> Удалить
+            </button>
+          ) : (
+            <button className="btn btn-sm" onClick={() => {
+              if (canToggle) {
+                window.MK_SCHEDULE.toggleCancel(lesson.date, lesson.id);
+                notify(isCancelled ? 'Урок восстановлен' : 'Урок отменён на эту дату', 'ok');
+              } else {
+                notify('Урок отменён', 'ok');
+              }
+              onClose();
+            }}>{isCancelled ? 'Восстановить' : 'Отменить'}</button>
+          )}
           <span className="grow"></span>
           {canReschedule && (
             <button className="btn btn-sm" onClick={() => setReschedMode(true)}>
@@ -3159,7 +3172,8 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
             </button>
           )}
         </>
-      )}
+        );
+      })()}
     >
       <div className="kv-row">
         <div className="k">Кто</div>
@@ -3641,6 +3655,128 @@ const FilterSheet = ({ value, onApply, onClose }) => {
             Показывать перенесённые
           </button>
         </div>
+      </div>
+    </Sheet>
+  );
+};
+
+// ---------- New Student form ----------
+const STUDENT_COLORS = ['#1F3A2E','#9B6B2F','#7A4A2E','#3E5F4B','#2C5F77','#5A4B7C','#8C4A4A','#6B6024','#4A6B3E','#7C5A2E','#3D4F7A','#5E3D6B'];
+
+const StudentNewSheet = ({ onClose, notify, onCreated }) => {
+  const groups = window.MK_STORE.groups;
+  const [name, setName] = React.useState('');
+  const [age, setAge] = React.useState(6);
+  const [parent, setParent] = React.useState('');
+  const [phone, setPhone] = React.useState('');
+  const [groupId, setGroupId] = React.useState('');
+  const [spine, setSpine] = React.useState(STUDENT_COLORS[Math.floor(Math.random() * STUDENT_COLORS.length)]);
+
+  const _deriveShort = (full) => {
+    const parts = full.trim().split(/\s+/);
+    if (parts.length === 0 || !parts[0]) return '';
+    if (parts.length === 1) return parts[0];
+    return parts[0] + ' ' + parts[1][0] + '.';
+  };
+
+  const save = () => {
+    if (!name.trim()) { notify('Введите имя ученика', 'err'); return; }
+    const id = `s_${Date.now().toString(36)}`;
+    const monthsRu = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+    const now = new Date();
+    const joined = `${monthsRu[now.getMonth()]} ${now.getFullYear()}`;
+    const group = groups.find(g => g.id === groupId);
+    const days = group?.days || [];
+    const time = group?.time || '';
+    const student = {
+      id,
+      name: name.trim(),
+      short: _deriveShort(name),
+      age: parseInt(age, 10) || 6,
+      groupId: groupId || '',
+      pack: 0,
+      used: 0,
+      parent: parent.trim() || '',
+      phone: phone.trim() || '',
+      joined,
+      spine,
+      scores: { 'Чтение': 50, 'Математика': 50, 'Письмо': 50, 'Логика': 50 },
+      notes: '',
+      notesList: [],
+      days,
+      time,
+      price: window.MK_PROFILE.data.defaultPrice || 1600,
+      paid: '',
+      freezeUsed: 0, freezeMax: 3,
+      status: 'active',
+      lessons: [],
+      events: [],
+    };
+    window.MK_STORE.addStudent(student);
+    onCreated && onCreated(id);
+    onClose();
+    notify(`Ученик «${student.name}» добавлен`, 'ok');
+  };
+
+  return (
+    <Sheet
+      eyebrow="новая запись · ежедневник"
+      title="Новый"
+      titleEm="ученик"
+      onClose={onClose}
+      foot={<>
+        <button className="btn btn-sm" onClick={onClose}>Отмена</button>
+        <span className="grow"></span>
+        <button className="btn btn-sm btn-primary" onClick={save}>
+          <Icon name="check" size={13}/> Добавить
+        </button>
+      </>}
+    >
+      <div className="fld">
+        <label>Имя и фамилия</label>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Лиза Морозова" autoFocus />
+      </div>
+      <div className="fld-row">
+        <div className="fld">
+          <label>Возраст</label>
+          <input type="number" min={3} max={18} value={age} onChange={e => setAge(e.target.value)} />
+        </div>
+        <div className="fld">
+          <label>Группа</label>
+          <select value={groupId} onChange={e => setGroupId(e.target.value)}>
+            <option value="">без группы (индивид.)</option>
+            {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="fld">
+        <label>Родитель</label>
+        <input value={parent} onChange={e => setParent(e.target.value)} placeholder="Имя и фамилия родителя" />
+      </div>
+      <div className="fld">
+        <label>Телефон</label>
+        <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+7 999 123 45 67" />
+      </div>
+      <div className="fld">
+        <label>Цвет (для аватарки и корешка)</label>
+        <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+          {STUDENT_COLORS.map(c => (
+            <button
+              key={c}
+              onClick={() => setSpine(c)}
+              title={c}
+              style={{
+                width:24, height:24, padding:0, borderRadius:'50%', cursor:'pointer',
+                background: c, border: spine === c ? '2px solid var(--ink)' : '2px solid transparent',
+                outline: spine === c ? '2px solid var(--paper-card)' : 'none',
+                outlineOffset: spine === c ? '-4px' : 0,
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      <div style={{padding:'12px 14px', background:'var(--paper-deep)', borderRadius:8, fontSize:12, color:'var(--ink-soft)', marginTop:8}}>
+        Пакет занятий — пустой. После создания откройте карточку и нажмите <b>Продлить пакет</b>, чтобы записать первую оплату.
       </div>
     </Sheet>
   );
@@ -4528,6 +4664,15 @@ const Students = ({ selectedId, setSelectedId }) => {
       <div className="students-shell">
         {/* LIST */}
         <div className="card students-list-card">
+          <div style={{padding:'10px 14px 0', display:'flex', gap:6}}>
+            <button
+              onClick={() => openSheet('student-new', { onCreated: (id) => setSelectedId(id) })}
+              className="btn btn-sm btn-primary"
+              style={{width:'100%', justifyContent:'center'}}
+            >
+              <Icon name="plus" size={13}/> Новый ученик
+            </button>
+          </div>
           <div className="students-search">
             <Icon name="search" size={16} />
             <input
@@ -4674,6 +4819,18 @@ const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentU
           </div>
         ))}
         <div style={{marginLeft:'auto', display:'flex', gap:8, padding:'4px 0'}}>
+          <button
+            className="btn btn-sm"
+            onClick={() => {
+              if (!window.confirm(`Удалить ученика «${s.name}»? Все его уроки, платежи и заметки будут утеряны.`)) return;
+              window.MK_STORE.removeStudent(s.id);
+              notify(`Ученик «${s.name}» удалён`, 'ok');
+            }}
+            style={{color:'var(--berry)'}}
+            title="Удалить ученика"
+          >
+            <Icon name="x" size={13}/> Удалить
+          </button>
           <button className="btn btn-sm" onClick={() => openSheet('parent-mk', { student: s })}>
               <Icon name="share" size={13}/> Карточка для родителей
             </button>
@@ -4684,7 +4841,7 @@ const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentU
       <div className="profile-body">
         {tab === 'обзор'   && <OverviewPane s={s} left={left} openSheet={openSheet} notify={notify} skillsStore={skillsStore} />}
         {tab === 'занятия' && <LessonsPane s={s} openSheet={openSheet} />}
-        {tab === 'оплата'  && <PaymentsPane s={s} left={left} openSheet={openSheet} />}
+        {tab === 'оплата'  && <PaymentsPane s={s} left={left} openSheet={openSheet} notify={notify} />}
         {tab === 'заметки' && <NotesPane s={s} notify={notify} />}
       </div>
     </div>
@@ -5005,13 +5162,21 @@ const LessonsPane = ({ s, openSheet }) => {
   );
 };
 
-const PaymentsPane = ({ s, left, openSheet }) => {
-  // Берём реальные платежи из student.events
+const PaymentsPane = ({ s, left, openSheet, notify }) => {
+  // Берём реальные платежи из student.events с сохранением их индекса
   const stored = window.MK_STORE.getStudent(s.id) || s;
   const _mruShort = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
-  const allPayments = (stored.events || []).filter(e => e.type === 'payment' || e.type === 'payment-pending');
-  // Сортируем от новых к старым
-  const sorted = allPayments.map(e => {
+  const events = stored.events || [];
+  const [editIdx, setEditIdx] = React.useState(-1);
+  const [draftAmount, setDraftAmount] = React.useState(0);
+  const [draftPending, setDraftPending] = React.useState(false);
+  const [draftMethod, setDraftMethod] = React.useState('');
+
+  const allPayments = events
+    .map((e, eventIdx) => ({ e, eventIdx }))
+    .filter(x => x.e.type === 'payment' || x.e.type === 'payment-pending');
+
+  const sorted = allPayments.map(({ e, eventIdx }) => {
     const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
     if (!m) return null;
     const day = parseInt(m[1], 10);
@@ -5019,22 +5184,52 @@ const PaymentsPane = ({ s, left, openSheet }) => {
     const year = parseInt(m[3], 10);
     const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
     const amount = rub ? parseInt(rub[1].replace(/[\s ]/g, ''), 10) : (s.price || 0);
-    // Размер пакета из note ("8 занятий")
     const lessonsMatch = (e.note || '').match(/(\d+)\s*заня/);
     const lessonsCount = lessonsMatch ? lessonsMatch[1] : '';
     const methodMatch = (e.note || '').match(/(СБП|Карта|Наличные)/);
     const method = methodMatch ? methodMatch[1] : '';
     return {
+      eventIdx, originalEvent: e,
       day, month, year, sortKey: year * 10000 + month * 100 + day,
       lessonsLabel: lessonsCount ? `${lessonsCount} уроков` : 'пакет',
-      method,
-      amount,
+      lessonsCount, method, amount,
       pending: e.type === 'payment-pending',
     };
   }).filter(Boolean).sort((a, b) => b.sortKey - a.sortKey);
 
-  // Номер текущего активного пакета — порядковый номер от начала истории
   const packNumber = String(sorted.length).padStart(4, '0');
+
+  const beginEdit = (p) => {
+    setEditIdx(p.eventIdx);
+    setDraftAmount(p.amount);
+    setDraftPending(p.pending);
+    setDraftMethod(p.method || 'СБП');
+  };
+  const cancelEdit = () => { setEditIdx(-1); };
+
+  const saveEdit = (p) => {
+    const amt = parseInt(draftAmount, 10) || 0;
+    const newNote = draftPending
+      ? `Ждёт оплаты · ${p.lessonsCount || ''}${p.lessonsCount ? ' занятий — ' : ''}${amt.toLocaleString('ru-RU')} ₽`
+      : `Оплата · ${p.lessonsCount || ''}${p.lessonsCount ? ' занятий — ' : ''}${amt.toLocaleString('ru-RU')} ₽${draftMethod ? ' · ' + draftMethod : ''}`;
+    const newType = draftPending ? 'payment-pending' : 'payment';
+    window.MK_STORE.updateStudent(s.id, st => ({
+      ...st,
+      events: (st.events || []).map((e, i) => i === p.eventIdx ? { ...e, type: newType, note: newNote } : e),
+    }));
+    setEditIdx(-1);
+    notify && notify('Платёж обновлён', 'ok');
+  };
+
+  const deleteEvent = (p) => {
+    if (!window.confirm('Удалить это событие? Платёж больше не будет учитываться в отчётах.')) return;
+    window.MK_STORE.updateStudent(s.id, st => ({
+      ...st,
+      events: (st.events || []).filter((_, i) => i !== p.eventIdx),
+    }));
+    if (editIdx === p.eventIdx) setEditIdx(-1);
+    notify && notify('Платёж удалён', 'ok');
+  };
 
   return (
   <>
@@ -5055,8 +5250,47 @@ const PaymentsPane = ({ s, left, openSheet }) => {
           <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-faint)', padding:'10px 0'}}>
             Платежей пока не было. Нажмите «Продлить пакет» в разделе «Пакет уроков» — там можно записать первую оплату.
           </div>
-        ) : sorted.map((p, i) => (
-          <div key={i} style={{display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:14, padding:'14px 0', borderTop: i ? '1px dashed var(--rule)' : 'none', alignItems:'center'}}>
+        ) : sorted.map((p, i) => editIdx === p.eventIdx ? (
+          <div key={p.eventIdx} style={{padding:'14px 16px', border:'1px solid var(--forest)', borderRadius:12, background:'var(--moss-pale)', marginTop: i ? 10 : 0}}>
+            <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:10}}>
+              <span style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-faint)'}}>
+                редактирование · {String(p.day).padStart(2,'0')} {_mruShort[p.month]} {p.year}
+              </span>
+            </div>
+            <div className="fld-row">
+              <div className="fld" style={{marginBottom:10}}>
+                <label>Сумма ₽</label>
+                <input type="number" value={draftAmount} onChange={e => setDraftAmount(e.target.value)} />
+              </div>
+              <div className="fld" style={{marginBottom:10}}>
+                <label>Статус</label>
+                <div className="choices">
+                  <button className={`choice ${!draftPending ? 'on' : ''}`} onClick={() => setDraftPending(false)}>✓ Оплачено</button>
+                  <button className={`choice ${draftPending ? 'on' : ''}`} onClick={() => setDraftPending(true)}>⌛ Ждёт</button>
+                </div>
+              </div>
+            </div>
+            {!draftPending && (
+              <div className="fld" style={{marginBottom:10}}>
+                <label>Способ оплаты</label>
+                <div className="choices">
+                  {['СБП','Карта','Наличные'].map(m => (
+                    <button key={m} className={`choice ${draftMethod === m ? 'on' : ''}`} onClick={() => setDraftMethod(m)}>{m}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{display:'flex', justifyContent:'flex-end', gap:8, marginTop:10, paddingTop:10, borderTop:'1px dashed var(--rule)'}}>
+              <button className="btn btn-sm" onClick={() => deleteEvent(p)} style={{color:'var(--berry)'}}>
+                <Icon name="x" size={13}/> Удалить
+              </button>
+              <span className="grow"></span>
+              <button className="btn btn-sm" onClick={cancelEdit}>Отмена</button>
+              <button className="btn btn-sm btn-primary" onClick={() => saveEdit(p)}>Сохранить</button>
+            </div>
+          </div>
+        ) : (
+          <div key={p.eventIdx} className="payment-row" style={{display:'grid', gridTemplateColumns:'auto 1fr auto auto auto', gap:14, padding:'14px 0', borderTop: i ? '1px dashed var(--rule)' : 'none', alignItems:'center'}}>
             <div className="font-serif italic" style={{fontSize:18, color:'var(--ink)', minWidth:90}}>
               {String(p.day).padStart(2,'0')} {_mruShort[p.month]} {p.year}
             </div>
@@ -5070,6 +5304,20 @@ const PaymentsPane = ({ s, left, openSheet }) => {
             <span className={`pill ${p.pending ? '' : 'green'}`} style={{textTransform:'lowercase'}}>
               {p.pending ? 'ждёт' : 'оплачен'}
             </span>
+            <div style={{display:'flex', gap:4}}>
+              <button onClick={() => beginEdit(p)} title="Редактировать" style={{
+                width:26, height:26, padding:0, display:'grid', placeItems:'center', cursor:'pointer',
+                border:'none', background:'transparent', color:'var(--ink-faint)', borderRadius:6,
+              }} onMouseEnter={e => e.currentTarget.style.color='var(--forest)'} onMouseLeave={e => e.currentTarget.style.color='var(--ink-faint)'}>
+                <Icon name="edit" size={13}/>
+              </button>
+              <button onClick={() => deleteEvent(p)} title="Удалить" style={{
+                width:26, height:26, padding:0, display:'grid', placeItems:'center', cursor:'pointer',
+                border:'none', background:'transparent', color:'var(--ink-faint)', borderRadius:6,
+              }} onMouseEnter={e => e.currentTarget.style.color='var(--berry)'} onMouseLeave={e => e.currentTarget.style.color='var(--ink-faint)'}>
+                <Icon name="x" size={13}/>
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -6646,6 +6894,7 @@ const App = () => {
       case 'parent-mk': return <ParentCardMk       {...common} {...props} />;
       case 'parent-pick': return <ParentPickSheet  {...common} {...props} />;
       case 'payments-report': return <PaymentsReportSheet {...common} {...props} />;
+      case 'student-new': return <StudentNewSheet {...common} {...props} />;
       default: return null;
     }
   };
