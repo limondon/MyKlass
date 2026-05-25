@@ -1903,6 +1903,137 @@ window.MK_DATA = {
   alerts: [],
 };
 
+// ── Алерты учителя — автогенерация из реальных данных + хранение "прочитано" ──
+const MK_ALERTS_READ_KEY = 'mk.alerts.read';
+window.MK_ALERTS = (() => {
+  const _load = () => { try { return new Set(JSON.parse(localStorage.getItem(MK_ALERTS_READ_KEY) || '[]')); } catch { return new Set(); } };
+  const _save = (s) => { try { localStorage.setItem(MK_ALERTS_READ_KEY, JSON.stringify([...s])); } catch {} };
+  const _subs = new Set();
+  let _read = _load();
+
+  const _compute = () => {
+    const out = [];
+    const students = (window.MK_STORE && window.MK_STORE.students) || [];
+    const now = new Date();
+
+    // 1) Ожидающие оплаты
+    for (const s of students) {
+      for (const e of (s.events || [])) {
+        if (e.type !== 'payment-pending') continue;
+        out.push({
+          id: `pay-pending:${s.id}:${e.date}`,
+          when: e.date,
+          kind: 'warn',
+          body: `<b>${s.name}</b> — ждём оплату: ${e.note}`,
+          target: { type: 'student', id: s.id },
+          cta: 'Открыть карточку',
+        });
+      }
+    }
+
+    // 2) Пакет на исходе / закончился
+    for (const s of students) {
+      const left = (s.pack || 0) - (s.used || 0);
+      if (left === 1) {
+        out.push({
+          id: `low:${s.id}`,
+          when: 'сейчас',
+          kind: 'warn',
+          body: `У <b>${s.name}</b> остался <b>1 урок</b> из ${s.pack}`,
+          target: { type: 'student', id: s.id },
+          cta: 'Продлить пакет',
+          action: 'renew',
+        });
+      } else if (left <= 0 && s.status !== 'ended') {
+        out.push({
+          id: `empty:${s.id}`,
+          when: 'сейчас',
+          kind: 'berry',
+          body: `<b>${s.name}</b> — <b>пакет израсходован</b>`,
+          target: { type: 'student', id: s.id },
+          cta: 'Продлить пакет',
+          action: 'renew',
+        });
+      }
+    }
+
+    // 3) Недавние оплаты (7 дней)
+    for (const s of students) {
+      for (const e of (s.events || [])) {
+        if (e.type !== 'payment') continue;
+        const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
+        if (!m) continue;
+        const eDate = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+        const daysAgo = Math.round((now - eDate) / (24 * 3600 * 1000));
+        if (daysAgo < 0 || daysAgo > 7) continue;
+        const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
+        const amt = rub ? rub[1].trim().replace(/\s+/g, ' ') : '';
+        out.push({
+          id: `paid:${s.id}:${e.date}`,
+          when: e.date.slice(0, 5),
+          kind: 'good',
+          body: `<b>${s.name}</b> оплатила пакет${amt ? ' — ' + amt + ' ₽' : ''}`,
+          target: { type: 'student', id: s.id },
+          cta: 'Открыть карточку',
+        });
+      }
+    }
+
+    // Сортировка: непрочитанные сверху
+    return out;
+  };
+
+  return {
+    get items() { return _compute().map(a => ({ ...a, read: _read.has(a.id) })); },
+    get unreadCount() { return _compute().filter(a => !_read.has(a.id)).length; },
+    markRead(id) { _read.add(id); _save(_read); _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } }); },
+    markAllRead() { for (const a of _compute()) _read.add(a.id); _save(_read); _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } }); },
+    subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
+  };
+})();
+
+// ── Наблюдения недели — авто-генерация для Dashboard ──
+window.MK_OBSERVATIONS = (() => {
+  const compute = () => {
+    const out = [];
+    const students = (window.MK_STORE && window.MK_STORE.students) || [];
+    for (const s of students) {
+      const lessons = s.lessons || [];
+      const short = s.short || s.name.split(' ')[0];
+      // Положительный — много 'done' подряд
+      const recent = lessons.slice(-6);
+      const recentDone = recent.filter(l => l.status === 'done').length;
+      if (recentDone >= 4) {
+        out.push({
+          kind: 'up', name: short, color: 'var(--forest)', icon: '↗',
+          hint: `${recentDone} из ${recent.length} последних уроков проведены`,
+          text: 'Стабильно ходит — поддерживаем темп.',
+        });
+      }
+      // Болезнь / переносы
+      const sickCount = lessons.filter(l => l.status === 'sick' || l.status === 'sick-wait').length;
+      if (sickCount >= 2) {
+        out.push({
+          kind: 'warn', name: short, color: 'var(--ochre-deep)', icon: '⌛',
+          hint: `${sickCount} переносов по болезни`,
+          text: 'Уточнить у родителей о здоровье.',
+        });
+      }
+      // Пакет на исходе
+      const left = (s.pack || 0) - (s.used || 0);
+      if (left === 1) {
+        out.push({
+          kind: 'urgent', name: short, color: 'var(--berry)', icon: '!',
+          hint: `остался ${left} урок из ${s.pack}`,
+          text: 'Напомнить о продлении абонемента.',
+        });
+      }
+    }
+    return out.slice(0, 3);
+  };
+  return { get items() { return compute(); } };
+})();
+
 // ── Профиль учителя (имя, роль) — отдельный мини-store с подпиской ──
 const MK_PROFILE_KEY = 'mk.profile';
 window.MK_PROFILE = (() => {
@@ -3314,42 +3445,67 @@ const AlertModal = ({ alert, onClose, notify }) => {
 };
 
 // ---------- Notifications panel ----------
-const NotifSheet = ({ onClose, notify }) => {
-  const items = [
-    { when: '11:42', dot: 'warn',  body: '<b>Маша Иванова</b> оплатила пакет — 12 800 ₽' },
-    { when: '11:20', dot: '',      body: 'Перенос: <b>Артём Соколов</b> просит перенести вт → пт' },
-    { when: '09:08', dot: 'berry', body: '<b>Миша Васильев</b> — пакет израсходован, доступ закроется' },
-    { when: '08:54', dot: '',      body: 'Завтра: <b>3 урока</b>, первый в 09:00' },
-    { when: '20.05', dot: 'warn',  body: 'У <b>Лизы Морозовой</b> остался 1 урок из 8' },
-    { when: '19.05', dot: '',      body: 'Новый ученик в листе ожидания — <b>Егор, 6 лет</b>' },
-    { when: '18.05', dot: '',      body: 'Отзыв от родителя <b>Полины Орловой</b> — 5 звёзд' },
-  ];
+const NotifSheet = ({ onClose, notify, goTo, setSelectedStudent }) => {
+  const { openSheet } = useApp();
+  const items = window.MK_ALERTS.items;
+  // Сначала непрочитанные, потом прочитанные
+  const sorted = [...items].sort((a, b) => (a.read === b.read) ? 0 : a.read ? 1 : -1);
+  const unread = items.filter(i => !i.read).length;
+
+  const handleOpen = (n) => {
+    window.MK_ALERTS.markRead(n.id);
+    if (n.target?.type === 'student' && n.target.id) {
+      setSelectedStudent && setSelectedStudent(n.target.id);
+      onClose();
+      goTo && goTo('students');
+      // Если у алерта есть action 'renew' — откроем модалку продления после перехода
+      if (n.action === 'renew') {
+        setTimeout(() => {
+          const student = window.MK_STORE.getStudent(n.target.id);
+          if (student) openSheet('renew', { student });
+        }, 200);
+      }
+    } else {
+      onClose();
+    }
+  };
+
   return (
     <Sheet
-      eyebrow={`${items.length} событий · последние 3 дня`}
+      eyebrow={items.length === 0 ? 'пока тихо' : `${items.length} событий · ${unread} непрочитано`}
       title="Оповещения"
       titleEm="и события"
       onClose={onClose}
       foot={<>
-        <button className="btn btn-sm" onClick={() => { notify('Все оповещения отмечены прочитанными', 'ok'); onClose(); }}>
+        <button className="btn btn-sm" disabled={unread === 0}
+          style={{opacity: unread === 0 ? 0.5 : 1}}
+          onClick={() => { window.MK_ALERTS.markAllRead(); notify('Все оповещения прочитаны', 'ok'); }}>
           Отметить всё прочитанным
         </button>
         <span className="grow"></span>
         <button className="btn btn-sm" onClick={onClose}>Готово</button>
       </>}
     >
-      <div className="notif-list">
-        {items.map((n, i) => (
-          <div key={i} className="notif-row">
-            <span className={`dot ${n.dot}`}></span>
-            <div>
-              <div className="body" dangerouslySetInnerHTML={{ __html: n.body }} />
-              <div className="when">{n.when}</div>
+      {sorted.length === 0 ? (
+        <div className="font-serif italic" style={{fontSize:17, color:'var(--ink-soft)', padding:'10px 0'}}>
+          Нет оповещений. Алерты появляются сами, когда у учеников заканчивается пакет, поступает оплата или есть незавершённая оплата.
+        </div>
+      ) : (
+        <div className="notif-list">
+          {sorted.map(n => (
+            <div key={n.id} className="notif-row" style={{opacity: n.read ? 0.55 : 1}}>
+              <span className={`dot ${n.kind === 'warn' ? 'warn' : n.kind === 'berry' ? 'berry' : ''}`}></span>
+              <div>
+                <div className="body" dangerouslySetInnerHTML={{ __html: n.body }} />
+                <div className="when">{n.when}{n.read ? ' · прочитано' : ''}</div>
+              </div>
+              <button className="btn btn-sm btn-ghost" onClick={() => handleOpen(n)}>
+                {n.cta || 'Открыть'}
+              </button>
             </div>
-            <button className="btn btn-sm btn-ghost" onClick={() => notify('Открыто', 'ok')}>Открыть</button>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </Sheet>
   );
 };
@@ -4089,6 +4245,11 @@ const Dashboard = ({ goTo }) => {
 
   const monthIncome = _curPayments.sum;
 
+  // Алерты из MK_ALERTS (только непрочитанные, до 4)
+  const dashAlerts = window.MK_ALERTS.items.filter(a => !a.read).slice(0, 4);
+  // Наблюдения недели — авто-генерация
+  const observations = window.MK_OBSERVATIONS.items;
+
   return (
     <div className="content">
       <div className="dash-2col">
@@ -4196,7 +4357,7 @@ const Dashboard = ({ goTo }) => {
         </div>
       </div>
 
-      {/* TWO COLUMN: ALERTS + WAITING LIST */}
+      {/* TWO COLUMN: ALERTS + OBSERVATIONS */}
       <div className="dash-2col">
         <div className="card">
           <div className="card-head">
@@ -4204,17 +4365,33 @@ const Dashboard = ({ goTo }) => {
               <div className="card-tag">требует внимания</div>
               <div className="card-title">Оповещения <em>и события</em></div>
             </div>
-            <Pill tone="berry" dot>{alerts.length} новых</Pill>
+            {dashAlerts.length > 0 && <Pill tone="berry" dot>{dashAlerts.length} новых</Pill>}
           </div>
           <div className="alerts">
-            {alerts.map(a => (
+            {dashAlerts.length === 0 ? (
+              <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-faint)', padding:'10px 4px'}}>
+                Сейчас нет открытых вопросов — все алерты прочитаны.
+              </div>
+            ) : dashAlerts.map(a => (
               <div key={a.id} className="alert-row">
-                <div className={`alert-dot ${a.kind}`}></div>
+                <div className={`alert-dot ${a.kind === 'warn' ? 'warn' : a.kind === 'berry' ? 'berry' : ''}`}></div>
                 <div className="alert-text">
-                  <span dangerouslySetInnerHTML={{ __html: a.text }} />
-                  <span className="meta">{a.meta}</span>
+                  <span dangerouslySetInnerHTML={{ __html: a.body }} />
+                  <span className="meta">{a.when}</span>
                 </div>
-                <button className="alert-act" onClick={() => openSheet('alert', { alert: a })}>{a.cta}</button>
+                <button className="alert-act" onClick={() => {
+                  window.MK_ALERTS.markRead(a.id);
+                  if (a.target?.type === 'student' && a.target.id) {
+                    setSelectedStudent && setSelectedStudent(a.target.id);
+                    goTo && goTo('students');
+                    if (a.action === 'renew') {
+                      setTimeout(() => {
+                        const st = window.MK_STORE.getStudent(a.target.id);
+                        if (st) openSheet('renew', { student: st });
+                      }, 200);
+                    }
+                  }
+                }}>{a.cta || 'Открыть'}</button>
               </div>
             ))}
           </div>
@@ -4228,37 +4405,28 @@ const Dashboard = ({ goTo }) => {
             </div>
           </div>
 
-          <div style={{display:'flex', flexDirection:'column', gap:18}}>
-            <div>
-              <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom: 6}}>
-                <span className="font-serif" style={{fontSize:22, color:'var(--forest)'}}>↗ Полина</span>
-                <span style={{fontSize:12, color:'var(--ink-faint)'}}>дочитала Букварь до буквы Я</span>
-              </div>
-              <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-soft)'}}>
-                Идём вперёд по плану — пора начинать читать короткие тексты вслух.
-              </div>
+          {observations.length === 0 ? (
+            <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-faint)', padding:'10px 4px'}}>
+              Пока всё ровно — наблюдения появятся когда у учеников будут заметные изменения (много проведённых уроков подряд, пропуски, пакет на исходе).
             </div>
-            <div className="divider"></div>
-            <div>
-              <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom: 6}}>
-                <span className="font-serif" style={{fontSize:22, color:'var(--ochre-deep)'}}>⌛ Артём</span>
-                <span style={{fontSize:12, color:'var(--ink-faint)'}}>трудно усидеть последние 15 минут</span>
-              </div>
-              <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-soft)'}}>
-                Попробую разбить на блоки по 10 минут + физкультурная пауза.
-              </div>
+          ) : (
+            <div style={{display:'flex', flexDirection:'column', gap:18}}>
+              {observations.map((obs, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 && <div className="divider"></div>}
+                  <div>
+                    <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom: 6}}>
+                      <span className="font-serif" style={{fontSize:22, color: obs.color}}>{obs.icon} {obs.name}</span>
+                      <span style={{fontSize:12, color:'var(--ink-faint)'}}>{obs.hint}</span>
+                    </div>
+                    <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-soft)'}}>
+                      {obs.text}
+                    </div>
+                  </div>
+                </React.Fragment>
+              ))}
             </div>
-            <div className="divider"></div>
-            <div>
-              <div style={{display:'flex', alignItems:'baseline', gap:8, marginBottom: 6}}>
-                <span className="font-serif" style={{fontSize:22, color:'var(--berry)'}}>! Соня</span>
-                <span style={{fontSize:12, color:'var(--ink-faint)'}}>3 пропуска подряд по средам</span>
-              </div>
-              <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-soft)'}}>
-                Уточнить у мамы — возможно стоит перенести постоянное время.
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -6174,7 +6342,8 @@ const App = () => {
     const u1 = window.MK_STORE.subscribe(_rerender);
     const u2 = window.MK_SCHEDULE.subscribe(_rerender);
     const u3 = window.MK_PROFILE.subscribe(_rerender);
-    return () => { u1(); u2(); u3(); };
+    const u4 = window.MK_ALERTS.subscribe(_rerender);
+    return () => { u1(); u2(); u3(); u4(); };
   }, []);
 
   // route/selected → URL hash
@@ -6358,8 +6527,16 @@ const App = () => {
               <button className="icon-btn" onClick={() => openSheet('search')} aria-label="Поиск">
                 <Icon name="search" size={15}/>
               </button>
-              <button className="icon-btn" onClick={() => openSheet('notif')} aria-label="Оповещения">
+              <button className="icon-btn" onClick={() => openSheet('notif')} aria-label="Оповещения" style={{position:'relative'}}>
                 <Icon name="bell" size={15}/>
+                {window.MK_ALERTS.unreadCount > 0 && (
+                  <span style={{
+                    position:'absolute', top:2, right:2, minWidth:14, height:14, padding:'0 4px',
+                    borderRadius:7, background:'var(--berry)', color:'oklch(0.97 0.02 85)',
+                    fontFamily:'JetBrains Mono', fontSize:9, fontWeight:600,
+                    display:'grid', placeItems:'center', lineHeight:1,
+                  }}>{window.MK_ALERTS.unreadCount}</span>
+                )}
               </button>
               <button className="btn" onClick={() => openSheet('record')}>
                 <Icon name="plus" size={13}/> Записать урок
