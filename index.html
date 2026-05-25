@@ -2117,18 +2117,28 @@ window.MK_SCHEDULE = (() => {
         });
       }
     }
-    // Фильтруем staticT: убираем индивидуальные слоты ученика, если у его группы
-    // есть собрание в это же время (иначе будут дубли — ученик в группе И отдельно)
+    // Фильтруем staticT:
+    //  1) Скрываем индивидуальный слот, если ученик в группе с собранием в это же время (дубль)
+    //  2) Скрываем индивидуальный слот, если у ученика закончился пакет (pack-used <= 0)
+    //     или статус ended — нет смысла его планировать пока не продлили
+    //  Групповые уроки не фильтруем — в группе могут быть другие активные ученики
     const allSlots = [...staticT, ...fromGroups];
     const filteredStatic = staticT.filter(b => {
       if (b.group || !b.studentId) return true;
       const student = (window.MK_STORE?.students || []).find(s => s.id === b.studentId);
-      if (!student || !student.groupId) return true;
-      const groupHasSlot = allSlots.some(gb =>
-        gb.group && gb.groupId === student.groupId
-          && gb.day === b.day && Math.abs(gb.start - b.start) < 0.05
-      );
-      return !groupHasSlot;
+      if (!student) return false;
+      // (2) Закрытый абонемент / ended
+      const remaining = (student.pack || 0) - (student.used || 0);
+      if (remaining <= 0 || student.status === 'ended') return false;
+      // (1) Дубль с группой
+      if (student.groupId) {
+        const groupHasSlot = allSlots.some(gb =>
+          gb.group && gb.groupId === student.groupId
+            && gb.day === b.day && Math.abs(gb.start - b.start) < 0.05
+        );
+        if (groupHasSlot) return false;
+      }
+      return true;
     });
     return [...filteredStatic, ...fromGroups];
   };
