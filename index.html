@@ -3325,7 +3325,6 @@ const RenewModal = ({ student, onClose, notify }) => {
   const apply = () => {
     const stored = window.MK_STORE.getStudent(student.id);
     if (!stored) { notify('Ученик не найден', 'err'); return; }
-    const newLessons = [...(stored.lessons || []), ...previewLessons];
     const amount = prices[packSize];
     const todayHuman = new Date().toLocaleDateString('ru-RU');
     const eventType = payStatus === 'paid' ? 'payment' : 'payment-pending';
@@ -3337,11 +3336,16 @@ const RenewModal = ({ student, onClose, notify }) => {
       date: todayHuman,
       note: noteSuffix,
     }];
+    // Архивируем done-уроки (для истории), новые слоты заменяют текущие
+    const oldLessons = stored.lessons || [];
+    const oldDone = oldLessons.filter(l => l.status === 'done');
+    const archivedLessons = [...(stored.archivedLessons || []), ...oldDone];
     const update = {
       ...stored,
-      lessons: newLessons,
-      pack: (stored.pack || 0) + packSize,
-      // если "оплачено" — обновляем дату оплаты
+      lessons: previewLessons,        // только новые слоты
+      pack: packSize,                  // размер нового пакета (не сумма)
+      used: 0,                         // счётчик с нуля
+      archivedLessons,                 // история проведённых сохраняется
       ...(payStatus === 'paid' ? { paid: todayHuman } : {}),
     };
     update.events = events;
@@ -3349,8 +3353,8 @@ const RenewModal = ({ student, onClose, notify }) => {
     onClose();
     notify(
       payStatus === 'paid'
-        ? `Пакет +${packSize} уроков добавлен · ${amount.toLocaleString('ru-RU')} ₽ оплачено`
-        : `Пакет +${packSize} уроков добавлен · ждём оплату ${amount.toLocaleString('ru-RU')} ₽`,
+        ? `Новый пакет ${packSize} уроков · ${amount.toLocaleString('ru-RU')} ₽ оплачено`
+        : `Новый пакет ${packSize} уроков · ждём оплату ${amount.toLocaleString('ru-RU')} ₽`,
       'ok'
     );
   };
@@ -3400,8 +3404,13 @@ const RenewModal = ({ student, onClose, notify }) => {
         </div>
       )}
       <div className="kv-row">
-        <div className="k">Текущий</div>
-        <div className="v">{student.used} из {student.pack} использовано · осталось {student.pack - student.used}</div>
+        <div className="k">Текущий пакет</div>
+        <div className="v">
+          {student.used} из {student.pack} использовано · осталось {student.pack - student.used}
+          <div style={{fontSize:11, color:'var(--ochre-deep)', marginTop:4, fontStyle:'italic'}}>
+            при продлении закроется и начнётся новый на {packSize} уроков
+          </div>
+        </div>
       </div>
       <div className="kv-row">
         <div className="k">Расписание</div>
@@ -5228,7 +5237,7 @@ const PackCard = ({ s, left, compact, openSheet }) => (
       </div>
       <div style={{textAlign:'right'}}>
         <div className="pack-label">оплачен</div>
-        <div className="font-serif italic" style={{fontSize:18, marginTop:4}}>4 апреля</div>
+        <div className="font-serif italic" style={{fontSize:18, marginTop:4}}>{s.paid || '—'}</div>
       </div>
     </div>
     <div className="stamps">
