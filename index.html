@@ -1790,9 +1790,21 @@ window.MK_STORE = (() => {
   const load = () => { try { return JSON.parse(localStorage.getItem(MK_LS_KEY)||'null'); } catch { return null; } };
   const save = (d) => { try { localStorage.setItem(MK_LS_KEY, JSON.stringify(d)); } catch {} };
 
+  // Авто-пересчёт used из lessons[] (status==='done').
+  // Поле used хранилось отдельно и устаревало — теперь синхронизируется.
+  const _syncUsed = (s) => {
+    if (!s || !s.lessons) return s;
+    const done = s.lessons.filter(l => l && l.status === 'done').length;
+    return { ...s, used: done };
+  };
+
   let _data = load();
   if (!_data || !_data.students || !_data.students.length) {
     _data = { students: DEMO_STUDENTS, groups: DEMO_GROUPS };
+    save(_data);
+  } else {
+    // Миграция при загрузке — пересчитываем used у всех (на случай старых битых данных)
+    _data.students = _data.students.map(_syncUsed);
     save(_data);
   }
 
@@ -1807,12 +1819,16 @@ window.MK_STORE = (() => {
     subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
 
     // Students
-    setStudents(s) { _data.students = s; _commit(); },
+    setStudents(s) { _data.students = s.map(_syncUsed); _commit(); },
     updateStudent(id, updater) {
-      _data.students = _data.students.map(s => s.id === id ? (typeof updater === 'function' ? updater({...s}) : {...s,...updater}) : s);
+      _data.students = _data.students.map(s => {
+        if (s.id !== id) return s;
+        const next = typeof updater === 'function' ? updater({...s}) : {...s, ...updater};
+        return _syncUsed(next);
+      });
       _commit();
     },
-    addStudent(s) { _data.students = [..._data.students, s]; _commit(); },
+    addStudent(s) { _data.students = [..._data.students, _syncUsed(s)]; _commit(); },
     removeStudent(id) { _data.students = _data.students.filter(s => s.id !== id); _commit(); },
 
     // Groups
@@ -4862,10 +4878,10 @@ const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentU
       </div>
 
       <div className="profile-body">
-        {tab === 'обзор'   && <OverviewPane s={s} left={left} openSheet={openSheet} notify={notify} skillsStore={skillsStore} />}
-        {tab === 'занятия' && <LessonsPane s={s} openSheet={openSheet} />}
-        {tab === 'оплата'  && <PaymentsPane s={s} left={left} openSheet={openSheet} notify={notify} />}
-        {tab === 'заметки' && <NotesPane s={s} notify={notify} />}
+        {tab === 'обзор'   && <OverviewPane key={s.id} s={s} left={left} openSheet={openSheet} notify={notify} skillsStore={skillsStore} />}
+        {tab === 'занятия' && <LessonsPane key={s.id} s={s} openSheet={openSheet} />}
+        {tab === 'оплата'  && <PaymentsPane key={s.id} s={s} left={left} openSheet={openSheet} notify={notify} />}
+        {tab === 'заметки' && <NotesPane key={s.id} s={s} notify={notify} />}
       </div>
     </div>
   );
@@ -5076,17 +5092,18 @@ const LessonStatusPicker = ({ lesson, idx, onSave, onClose }) => {
 };
 
 const LessonsPane = ({ s, openSheet }) => {
-  const [sub, setSub] = React.useState(() => {
+  // Читаем из store каждый рендер — App подписан на MK_STORE и перерендеривает
+  const sub = (() => {
     const stored = window.MK_STORE.getStudent(s.id);
     return stored && stored.lessons && stored.lessons.length ? stored : getSubData(s.id, s.pack||s.totalSessions||8);
-  });
+  })();
   const [picker, setPicker] = React.useState(null); // idx
 
   const left = sub.lessons.filter(l=>l.status==='future'||l.status==='sick-wait').length;
   const done = sub.lessons.filter(l=>l.status==='done').length;
 
   const saveLesson = (idx, status, note) => {
-    const updated = updateSubData(s.id, d => {
+    updateSubData(s.id, d => {
       const lessons = [...(d.lessons||[])];
       lessons[idx] = {...lessons[idx], status, note};
       const events = [...(d.events||[]), {
@@ -5096,7 +5113,6 @@ const LessonsPane = ({ s, openSheet }) => {
       }];
       return {...d, lessons, events};
     });
-    setSub({...updated});
     setPicker(null);
   };
 
