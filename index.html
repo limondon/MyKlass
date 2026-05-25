@@ -1903,6 +1903,24 @@ window.MK_DATA = {
   alerts: [],
 };
 
+// ── Профиль учителя (имя, роль) — отдельный мини-store с подпиской ──
+const MK_PROFILE_KEY = 'mk.profile';
+window.MK_PROFILE = (() => {
+  const _load = () => { try { return JSON.parse(localStorage.getItem(MK_PROFILE_KEY) || 'null') || null; } catch { return null; } };
+  const _save = (d) => { try { localStorage.setItem(MK_PROFILE_KEY, JSON.stringify(d)); } catch {} };
+  const _subs = new Set();
+  let _data = _load() || { name: 'Анна Сергеевна', role: 'репетитор', timezone: 'Москва · GMT+3', defaultPrice: 1600 };
+  return {
+    get data() { return _data; },
+    subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
+    update(patch) {
+      _data = { ..._data, ...patch };
+      _save(_data);
+      _subs.forEach(cb => { try { cb(); } catch (e) { console.error(e); } });
+    },
+  };
+})();
+
 // ── Lesson statuses (used by per-student & by group bulk conduct UIs) ──
 window.MK_LESSON_LABELS = {
   future: 'Запланировано', done: 'Проведено', transfer: 'Отработка',
@@ -3876,21 +3894,57 @@ const ArchiveSheet = ({ onClose, notify, goTo, setSelectedStudent }) => {
 };
 
 // ---------- Settings ----------
-const SettingsSheet = ({ onClose, notify }) => (
-  <Sheet
-    eyebrow="ежедневник"
-    title="Настройки"
-    onClose={onClose}
-    foot={<button className="btn btn-sm" onClick={onClose}>Готово</button>}
-  >
-    <div className="kv-row"><div className="k">Профиль</div><div className="v">Анна Сергеевна · репетитор</div></div>
-    <div className="kv-row"><div className="k">Кабинеты</div><div className="v">А, Б · Онлайн (Zoom)</div></div>
-    <div className="kv-row"><div className="k">Часовой пояс</div><div className="v">Москва · GMT+3</div></div>
-    <div className="kv-row"><div className="k">Уведомления</div><div className="v">Telegram, email — включено</div></div>
-    <div className="kv-row"><div className="k">Резервная копия</div><div className="v">ежедневно в 03:00</div></div>
-    <div className="kv-row"><div className="k">Тарифы</div><div className="v">1 600 ₽ / урок · скидки на пакеты</div></div>
-  </Sheet>
-);
+const SettingsSheet = ({ onClose, notify }) => {
+  const profile = window.MK_PROFILE.data;
+  const [name, setName] = React.useState(profile.name || '');
+  const [role, setRole] = React.useState(profile.role || '');
+  const [timezone, setTimezone] = React.useState(profile.timezone || '');
+  const [defaultPrice, setDefaultPrice] = React.useState(profile.defaultPrice || 1600);
+
+  const save = () => {
+    window.MK_PROFILE.update({
+      name: name.trim() || 'Учитель',
+      role: role.trim() || 'педагог',
+      timezone: timezone.trim(),
+      defaultPrice: parseInt(defaultPrice, 10) || 1600,
+    });
+    notify('Настройки сохранены', 'ok');
+    onClose();
+  };
+
+  return (
+    <Sheet
+      eyebrow="ежедневник"
+      title="Настройки"
+      onClose={onClose}
+      foot={<>
+        <button className="btn btn-sm" onClick={onClose}>Отмена</button>
+        <span className="grow"></span>
+        <button className="btn btn-sm btn-primary" onClick={save}>
+          <Icon name="check" size={13}/> Сохранить
+        </button>
+      </>}
+    >
+      <div className="fld">
+        <label>Имя</label>
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Имя и фамилия" />
+      </div>
+      <div className="fld">
+        <label>Роль / должность</label>
+        <input value={role} onChange={e => setRole(e.target.value)} placeholder="репетитор / педагог" />
+      </div>
+      <div className="fld">
+        <label>Часовой пояс</label>
+        <input value={timezone} onChange={e => setTimezone(e.target.value)} placeholder="Москва · GMT+3" />
+      </div>
+      <div className="fld">
+        <label>Стоимость урока по умолчанию</label>
+        <input type="number" value={defaultPrice} onChange={e => setDefaultPrice(e.target.value)} placeholder="1600" />
+        <div style={{fontSize:11, color:'var(--ink-faint)', marginTop:4}}>Используется когда у ученика не указана своя цена.</div>
+      </div>
+    </Sheet>
+  );
+};
 
 // ---------- Attendance mark picker ----------
 const MarkPicker = ({ onPick, onClose }) => {
@@ -6083,7 +6137,8 @@ const App = () => {
   useEffect(() => {
     const u1 = window.MK_STORE.subscribe(_rerender);
     const u2 = window.MK_SCHEDULE.subscribe(_rerender);
-    return () => { u1(); u2(); };
+    const u3 = window.MK_PROFILE.subscribe(_rerender);
+    return () => { u1(); u2(); u3(); };
   }, []);
 
   // route/selected → URL hash
@@ -6157,7 +6212,7 @@ const App = () => {
   const _grpMin = _grpSizes.length ? Math.min(..._grpSizes) : 0;
   const _grpMax = _grpSizes.length ? Math.max(..._grpSizes) : 0;
   const titles = {
-    dashboard:  { eyebrow: `${_wdCap} · ${_t.date} ${_t.month} ${_t.year}`, h1: ['Здравствуйте,', 'Анна Сергеевна'] },
+    dashboard:  { eyebrow: `${_wdCap} · ${_t.date} ${_t.month} ${_t.year}`, h1: ['Здравствуйте,', window.MK_PROFILE.data.name] },
     students:   { eyebrow: `${_allStudents.length} учеников · ${_allGroups.length} групп`, h1: ['Мой', 'класс'] },
     schedule:   { eyebrow: `Неделя ${_wkNum} · ${_t.month} ${_t.year}`,    h1: ['Учительский', 'ежедневник'] },
     attendance: { eyebrow: `Период · ${_attLabel}`,                         h1: ['Журнал', 'посещаемости'] },
@@ -6249,10 +6304,10 @@ const App = () => {
           </div>
 
           <div className="sidebar-footer">
-            <div className="avatar">АС</div>
+            <div className="avatar">{(window.MK_PROFILE.data.name || '').split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase()}</div>
             <div>
-              <div className="user-name">Анна Сергеевна</div>
-              <div className="user-role">репетитор</div>
+              <div className="user-name">{window.MK_PROFILE.data.name}</div>
+              <div className="user-role">{window.MK_PROFILE.data.role}</div>
             </div>
           </div>
         </aside>
