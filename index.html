@@ -3801,7 +3801,43 @@ const GroupSheet = ({ group, mode, onClose, notify, goTo, setSelectedStudent }) 
 };
 
 // ---------- Archive ----------
-const ArchiveSheet = ({ onClose, notify }) => (
+const ArchiveSheet = ({ onClose, notify, goTo, setSelectedStudent }) => {
+  const students = window.MK_STORE.students;
+  const _mruShort = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const _now = new Date();
+  // Собираем все pre-этого-месяца платежи (это "закрытые" пакеты — раз уже прошёл месяц)
+  // А также те, что у учеников status='ended'
+  const items = [];
+  for (const s of students) {
+    for (const e of (s.events || [])) {
+      if (e.type !== 'payment' && e.type !== 'payment-pending') continue;
+      const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
+      if (!m) continue;
+      const day = parseInt(m[1], 10);
+      const month = parseInt(m[2], 10) - 1;
+      const year = parseInt(m[3], 10);
+      // Архив = всё что старше текущего месяца, либо ученик уже "ended"
+      const isOlder = year < _now.getFullYear() || (year === _now.getFullYear() && month < _now.getMonth());
+      const isEnded = s.status === 'ended';
+      if (!isOlder && !isEnded) continue;
+      const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
+      const amount = rub ? parseInt(rub[1].replace(/[\s ]/g, ''), 10) : (s.price || 0);
+      const lessonsMatch = (e.note || '').match(/(\d+)\s*заня/);
+      const lessons = lessonsMatch ? lessonsMatch[1] : '';
+      items.push({
+        sid: s.id,
+        spine: s.spine,
+        who: s.name,
+        day, month, year,
+        sortKey: year * 10000 + month * 100 + day,
+        what: `${lessons ? lessons + ' уроков · ' : ''}${amount.toLocaleString('ru-RU')} ₽`,
+        status: e.type === 'payment-pending' ? 'ждёт' : (isEnded ? 'закрыт' : 'архив'),
+      });
+    }
+  }
+  items.sort((a, b) => b.sortKey - a.sortKey);
+
+  return (
   <Sheet
     eyebrow="закрытые пакеты"
     title="Архив"
@@ -3809,28 +3845,35 @@ const ArchiveSheet = ({ onClose, notify }) => (
     onClose={onClose}
     foot={<button className="btn btn-sm" onClick={onClose}>Готово</button>}
   >
-    <div className="search-results">
-      {[
-        { date: '8 фев 2026', who: 'Лиза Морозова', what: '8 уроков · 12 800 ₽' },
-        { date: '5 дек 2025', who: 'Лиза Морозова', what: '6 уроков · 9 600 ₽' },
-        { date: '5 дек 2025', who: 'Маша Иванова',  what: '8 уроков · 12 800 ₽' },
-        { date: '12 ноя 2025', who: 'Артём Соколов', what: '6 уроков · 9 600 ₽' },
-        { date: '8 окт 2025', who: 'Полина Орлова', what: '8 уроков · 12 800 ₽' },
-        { date: '4 окт 2025', who: 'Тима Зайцев',   what: '8 уроков · 12 800 ₽' },
-        { date: '20 сен 2025', who: 'Даня Петров',  what: '6 уроков · 9 600 ₽' },
-      ].map((r, i) => (
-        <div key={i} className="search-row" onClick={() => notify(`Открываю пакет ${r.who} · ${r.date}`, 'ok')}>
-          <div className="av">№</div>
-          <div style={{flex: 1}}>
-            <div className="what">{r.who}</div>
-            <div className="where">{r.date} · {r.what}</div>
-          </div>
-          <span className="pill">закрыт</span>
-        </div>
-      ))}
+    <div style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-faint)', marginBottom:14}}>
+      {items.length === 0 ? 'архив пуст' : `${items.length} ${items.length === 1 ? 'запись' : items.length < 5 ? 'записи' : 'записей'}`}
     </div>
+    {items.length === 0 ? (
+      <div className="font-serif italic" style={{fontSize:16, color:'var(--ink-soft)'}}>
+        Архив наполнится по мере того, как закрываются пакеты учеников или проходит месяц.
+      </div>
+    ) : (
+      <div className="search-results">
+        {items.map((r, i) => (
+          <div
+            key={i}
+            className="search-row"
+            onClick={() => { setSelectedStudent && setSelectedStudent(r.sid); goTo && goTo('students'); onClose(); }}
+            style={{cursor:'pointer'}}
+          >
+            <div className="av" style={{color: r.spine}}>{r.who.split(' ').map(w => w[0]).slice(0,2).join('').toUpperCase()}</div>
+            <div style={{flex: 1}}>
+              <div className="what">{r.who}</div>
+              <div className="where">{String(r.day).padStart(2,'0')} {_mruShort[r.month]} {r.year} · {r.what}</div>
+            </div>
+            <span className="pill">{r.status}</span>
+          </div>
+        ))}
+      </div>
+    )}
   </Sheet>
-);
+  );
+};
 
 // ---------- Settings ----------
 const SettingsSheet = ({ onClose, notify }) => (
@@ -3938,8 +3981,61 @@ const Dashboard = ({ goTo }) => {
   const totalActive = students.filter(s => (s.pack - s.used) > 0).length;
 
   // Поступления за текущий месяц — суммируем по платёжным событиям студентов
-  const monthIncome = (() => {
-    const targetMonth = _now.getMonth(); // 0–11
+  const sumPayments = (targetMonth, targetYear) => {
+    let sum = 0, count = 0;
+    for (const s of students) {
+      for (const e of (s.events || [])) {
+        if (e.type !== 'payment') continue;
+        const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
+        if (!m) continue;
+        const month = parseInt(m[2], 10) - 1;
+        const year = parseInt(m[3], 10);
+        if (month !== targetMonth || year !== targetYear) continue;
+        const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
+        if (rub) sum += parseInt(rub[1].replace(/[\s ]/g, ''), 10) || 0;
+        else sum += s.price || 0;
+        count++;
+      }
+    }
+    return { sum, count };
+  };
+  const _curMonth = _now.getMonth();
+  const _curYear = _now.getFullYear();
+  const _prevMonth = _curMonth === 0 ? 11 : _curMonth - 1;
+  const _prevYear = _curMonth === 0 ? _curYear - 1 : _curYear;
+  const _curPayments = sumPayments(_curMonth, _curYear);
+  const _prevPayments = sumPayments(_prevMonth, _prevYear);
+  const _incomeDelta = _prevPayments.sum > 0
+    ? Math.round((_curPayments.sum - _prevPayments.sum) / _prevPayments.sum * 100)
+    : null;
+  const _closingsSoon = (() => {
+    const horizon = 3;
+    let cnt = 0;
+    for (const s of students) {
+      const remaining = (s.pack || 0) - (s.used || 0);
+      if (remaining <= 0 || remaining > 5) continue;
+      const studentDays = s.days || [];
+      let lessonsInHorizon = 0;
+      const d = new Date(_now);
+      for (let i = 0; i <= horizon; i++) {
+        if (studentDays.includes(d.getDay())) lessonsInHorizon++;
+        d.setDate(d.getDate() + 1);
+      }
+      if (lessonsInHorizon >= remaining) cnt++;
+    }
+    return cnt;
+  })();
+  const _ruMonthsList = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  const _newThisMonth = students.filter(s => {
+    if (!s.joined) return false;
+    const j = s.joined.toLowerCase();
+    return j.includes(_ruMonthsList[_curMonth]) && j.includes(String(_curYear));
+  }).length;
+  const _waitlist = 0; // нет данных о листе ожидания
+
+  const monthIncome = _curPayments.sum;
+  /* eslint-disable */ const _unused_monthIncomeOld = false && (() => {
+    const targetMonth = _now.getMonth();
     const targetYear = _now.getFullYear();
     let sum = 0;
     for (const s of students) {
@@ -4030,7 +4126,11 @@ const Dashboard = ({ goTo }) => {
           <div className="ornament"><Icon name="students" size={14}/></div>
           <div className="stat-label">Учеников активно</div>
           <div className="stat-num">{totalActive}<small>/ {students.length}</small></div>
-          <div className="stat-foot"><span className="delta-up">+2</span> за месяц · 1 в листе ожидания</div>
+          <div className="stat-foot">
+            {_newThisMonth > 0
+              ? <><span className="delta-up">+{_newThisMonth}</span> за этот месяц</>
+              : 'без новых за этот месяц'}
+          </div>
         </div>
         <div className="stat" onClick={() => goTo('schedule')} style={{cursor:'pointer'}}>
           <div className="ornament"><Icon name="cal" size={14}/></div>
@@ -4038,17 +4138,28 @@ const Dashboard = ({ goTo }) => {
           <div className="stat-num">{week.filter(b => !b.canceled).length}</div>
           <div className="stat-foot">по расписанию</div>
         </div>
-        <div className="stat" onClick={() => notify('Отчёт за май готовлю — открою в новой вкладке')} style={{cursor:'pointer'}}>
+        <div className="stat" onClick={() => openSheet('payments-report')} style={{cursor:'pointer'}}>
           <div className="ornament"><Icon name="sparkle" size={14}/></div>
           <div className="stat-label">Поступления, {_mruDash[_now.getMonth()]}</div>
           <div className="stat-num font-serif">{monthIncome >= 1000 ? `${(monthIncome/1000).toFixed(1)}` : monthIncome}<small> {monthIncome >= 1000 ? 'т ' : ''}₽</small></div>
-          <div className="stat-foot">{(() => { const cnt = students.reduce((a,s) => a + (s.events||[]).filter(e => { const m=/^\d{2}\.(\d{2})\.(\d{4})$/.exec(e.date||''); return e.type==='payment' && m && +m[1]-1===_now.getMonth() && +m[2]===_now.getFullYear(); }).length, 0); return `${cnt} ${cnt===1?'пакет оплачен':cnt<5?'пакета оплачено':'пакетов оплачено'}`; })()}</div>
+          <div className="stat-foot">
+            {_incomeDelta !== null && (
+              <><span className={_incomeDelta >= 0 ? 'delta-up' : 'delta-down'}>
+                {_incomeDelta >= 0 ? '+' : ''}{_incomeDelta}%
+              </span> к {_mruDash[_prevMonth]} · </>
+            )}
+            {_curPayments.count} {_curPayments.count === 1 ? 'пакет оплачен' : _curPayments.count < 5 ? 'пакета оплачено' : 'пакетов оплачено'}
+          </div>
         </div>
         <div className="stat" onClick={() => goTo('students')} style={{cursor:'pointer'}}>
           <div className="ornament"><Icon name="bell" size={14}/></div>
           <div className="stat-label">Пакеты к продлению</div>
           <div className="stat-num">{lowPack.length}</div>
-          <div className="stat-foot"><span className="delta-down">2 закрытия</span> в ближайшие 3 дня</div>
+          <div className="stat-foot">
+            {_closingsSoon > 0
+              ? <><span className="delta-down">{_closingsSoon} {_closingsSoon === 1 ? 'закрытие' : _closingsSoon < 5 ? 'закрытия' : 'закрытий'}</span> в ближайшие 3 дня</>
+              : 'на ближайшие 3 дня всё ок'}
+          </div>
         </div>
       </div>
 
@@ -4684,40 +4795,78 @@ const LessonsPane = ({ s, openSheet }) => {
   );
 };
 
-const PaymentsPane = ({ s, left, openSheet }) => (
+const PaymentsPane = ({ s, left, openSheet }) => {
+  // Берём реальные платежи из student.events
+  const stored = window.MK_STORE.getStudent(s.id) || s;
+  const _mruShort = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+  const allPayments = (stored.events || []).filter(e => e.type === 'payment' || e.type === 'payment-pending');
+  // Сортируем от новых к старым
+  const sorted = allPayments.map(e => {
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
+    if (!m) return null;
+    const day = parseInt(m[1], 10);
+    const month = parseInt(m[2], 10) - 1;
+    const year = parseInt(m[3], 10);
+    const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
+    const amount = rub ? parseInt(rub[1].replace(/[\s ]/g, ''), 10) : (s.price || 0);
+    // Размер пакета из note ("8 занятий")
+    const lessonsMatch = (e.note || '').match(/(\d+)\s*заня/);
+    const lessonsCount = lessonsMatch ? lessonsMatch[1] : '';
+    const methodMatch = (e.note || '').match(/(СБП|Карта|Наличные)/);
+    const method = methodMatch ? methodMatch[1] : '';
+    return {
+      day, month, year, sortKey: year * 10000 + month * 100 + day,
+      lessonsLabel: lessonsCount ? `${lessonsCount} уроков` : 'пакет',
+      method,
+      amount,
+      pending: e.type === 'payment-pending',
+    };
+  }).filter(Boolean).sort((a, b) => b.sortKey - a.sortKey);
+
+  // Номер текущего активного пакета — порядковый номер от начала истории
+  const packNumber = String(sorted.length).padStart(4, '0');
+
+  return (
   <>
     <div className="profile-section">
       <div className="section-h">
         <h3>Текущий <em>пакет</em></h3>
-        <span className="tag">№ 0024</span>
+        <span className="tag">{sorted.length > 0 ? `№ ${packNumber}` : 'нет платежей'}</span>
       </div>
       <PackCard s={s} left={left} openSheet={openSheet} />
     </div>
     <div className="profile-section">
       <div className="section-h">
         <h3>История <em>платежей</em></h3>
-        <span className="tag">3 последних</span>
+        <span className="tag">{sorted.length === 0 ? 'пока пусто' : `${sorted.length} ${sorted.length === 1 ? 'запись' : sorted.length < 5 ? 'записи' : 'записей'}`}</span>
       </div>
       <div style={{display:'flex', flexDirection:'column', gap:0}}>
-        {[
-          { date: '4 апр 2026', pack: '8 уроков', sum: '12 800 ₽', status: 'оплачен', method: 'СБП' },
-          { date: '8 фев 2026', pack: '8 уроков', sum: '12 800 ₽', status: 'закрыт', method: 'карта' },
-          { date: '5 дек 2025', pack: '6 уроков', sum:  '9 600 ₽', status: 'закрыт', method: 'СБП' },
-        ].map((p, i) => (
+        {sorted.length === 0 ? (
+          <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-faint)', padding:'10px 0'}}>
+            Платежей пока не было. Нажмите «Продлить пакет» в разделе «Пакет уроков» — там можно записать первую оплату.
+          </div>
+        ) : sorted.map((p, i) => (
           <div key={i} style={{display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:14, padding:'14px 0', borderTop: i ? '1px dashed var(--rule)' : 'none', alignItems:'center'}}>
-            <div className="font-serif italic" style={{fontSize:18, color:'var(--ink)', minWidth:90}}>{p.date}</div>
-            <div>
-              <div style={{fontWeight:600, fontSize:14}}>{p.pack}</div>
-              <div style={{fontFamily:'JetBrains Mono', fontSize:10.5, color:'var(--ink-faint)', letterSpacing:'.08em', marginTop:2}}>{p.method.toUpperCase()}</div>
+            <div className="font-serif italic" style={{fontSize:18, color:'var(--ink)', minWidth:90}}>
+              {String(p.day).padStart(2,'0')} {_mruShort[p.month]} {p.year}
             </div>
-            <div className="font-mono" style={{fontSize:14, fontWeight:600}}>{p.sum}</div>
-            <span className={`pill ${p.status === 'оплачен' ? 'green' : ''}`} style={{textTransform:'lowercase'}}>{p.status}</span>
+            <div>
+              <div style={{fontWeight:600, fontSize:14}}>{p.lessonsLabel}</div>
+              {p.method && (
+                <div style={{fontFamily:'JetBrains Mono', fontSize:10.5, color:'var(--ink-faint)', letterSpacing:'.08em', marginTop:2}}>{p.method.toUpperCase()}</div>
+              )}
+            </div>
+            <div className="font-mono" style={{fontSize:14, fontWeight:600}}>{p.amount.toLocaleString('ru-RU')} ₽</div>
+            <span className={`pill ${p.pending ? '' : 'green'}`} style={{textTransform:'lowercase'}}>
+              {p.pending ? 'ждёт' : 'оплачен'}
+            </span>
           </div>
         ))}
       </div>
     </div>
   </>
-);
+  );
+};
 
 const NotesPane = ({ s, notify }) => {
   const [draft, setDraft] = React.useState('');
@@ -5642,6 +5791,120 @@ window.Groups = Groups;
 
 <!-- app.jsx -->
 <script type="text/babel" data-presets="react">
+// ── Payments report ──
+const PaymentsReportSheet = ({ onClose }) => {
+  const { students } = window.MK_DATA;
+  const [period, setPeriod] = React.useState('current'); // 'current' | 'prev' | 'all'
+  const _now = new Date();
+  const _mru = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'];
+  const _mruShort = ['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];
+
+  // Собираем все события type:payment с парсингом даты и суммы
+  const events = [];
+  for (const s of students) {
+    for (const e of (s.events || [])) {
+      if (e.type !== 'payment' && e.type !== 'payment-pending') continue;
+      const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(e.date || '');
+      if (!m) continue;
+      const day = parseInt(m[1], 10);
+      const month = parseInt(m[2], 10) - 1;
+      const year = parseInt(m[3], 10);
+      const rub = (e.note || '').match(/([\d\s ]+)\s*₽/);
+      const amount = rub ? parseInt(rub[1].replace(/[\s ]/g, ''), 10) : (s.price || 0);
+      events.push({
+        studentName: s.name,
+        studentId: s.id,
+        spine: s.spine,
+        date: { day, month, year, sortKey: year * 10000 + month * 100 + day },
+        dateStr: e.date,
+        note: e.note,
+        amount,
+        pending: e.type === 'payment-pending',
+      });
+    }
+  }
+  events.sort((a, b) => b.date.sortKey - a.date.sortKey);
+
+  const periodFiltered = period === 'all'
+    ? events
+    : events.filter(e => {
+        if (period === 'current') return e.date.month === _now.getMonth() && e.date.year === _now.getFullYear();
+        // prev
+        const pm = _now.getMonth() === 0 ? 11 : _now.getMonth() - 1;
+        const py = _now.getMonth() === 0 ? _now.getFullYear() - 1 : _now.getFullYear();
+        return e.date.month === pm && e.date.year === py;
+      });
+
+  const totalSum = periodFiltered.filter(e => !e.pending).reduce((a, e) => a + e.amount, 0);
+  const pendingSum = periodFiltered.filter(e => e.pending).reduce((a, e) => a + e.amount, 0);
+
+  const periodLabel = period === 'current'
+    ? _mru[_now.getMonth()] + ' ' + _now.getFullYear()
+    : period === 'prev'
+    ? _mru[(_now.getMonth() + 11) % 12] + ' ' + (_now.getMonth() === 0 ? _now.getFullYear() - 1 : _now.getFullYear())
+    : 'всё время';
+
+  return (
+    <Sheet
+      eyebrow="отчёт · поступления"
+      title="Поступления"
+      titleEm={periodLabel}
+      onClose={onClose}
+      foot={<button className="btn btn-sm" onClick={onClose}>Готово</button>}
+    >
+      <div style={{display:'flex', gap:6, marginBottom:18}}>
+        <button onClick={() => setPeriod('current')}
+          className={`choice ${period === 'current' ? 'on' : ''}`}>Текущий месяц</button>
+        <button onClick={() => setPeriod('prev')}
+          className={`choice ${period === 'prev' ? 'on' : ''}`}>Предыдущий</button>
+        <button onClick={() => setPeriod('all')}
+          className={`choice ${period === 'all' ? 'on' : ''}`}>Всё время</button>
+      </div>
+
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:18}}>
+        <div style={{padding:'14px 16px', background:'var(--moss-pale)', borderRadius:10}}>
+          <div style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-faint)'}}>Получено</div>
+          <div className="font-serif" style={{fontSize:28, color:'var(--forest)', marginTop:4}}>
+            {totalSum.toLocaleString('ru-RU')} <small style={{fontSize:14}}>₽</small>
+          </div>
+        </div>
+        <div style={{padding:'14px 16px', background:'var(--ochre-pale)', borderRadius:10}}>
+          <div style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.14em', textTransform:'uppercase', color:'var(--ink-faint)'}}>Ожидается</div>
+          <div className="font-serif" style={{fontSize:28, color:'var(--ochre-deep)', marginTop:4}}>
+            {pendingSum.toLocaleString('ru-RU')} <small style={{fontSize:14}}>₽</small>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:'flex', flexDirection:'column', gap:0}}>
+        {periodFiltered.length === 0 ? (
+          <div className="font-serif italic" style={{fontSize:15, color:'var(--ink-faint)', padding:'14px 0'}}>
+            Платежей в этом периоде ещё не было.
+          </div>
+        ) : periodFiltered.map((e, i) => (
+          <div key={i} style={{display:'grid', gridTemplateColumns:'auto 1fr auto auto', gap:14, padding:'12px 0', borderTop: i ? '1px dashed var(--rule)' : 'none', alignItems:'center'}}>
+            <div className="font-serif italic" style={{fontSize:16, color:'var(--ink)', minWidth:75}}>
+              {String(e.date.day).padStart(2,'0')} {_mruShort[e.date.month]}
+            </div>
+            <div>
+              <div style={{fontWeight:600, fontSize:13.5}}>{e.studentName}</div>
+              <div style={{fontFamily:'JetBrains Mono', fontSize:10, color:'var(--ink-faint)', letterSpacing:'.06em', marginTop:2}}>
+                {e.note}
+              </div>
+            </div>
+            <div className="font-mono" style={{fontSize:13, fontWeight:600}}>{e.amount.toLocaleString('ru-RU')} ₽</div>
+            <span className="pill" style={{
+              fontSize:10, padding:'2px 8px',
+              background: e.pending ? 'var(--ochre-pale)' : 'var(--moss-pale)',
+              color: e.pending ? 'var(--ochre-deep)' : 'var(--forest)',
+            }}>{e.pending ? 'ждёт' : 'оплачен'}</span>
+          </div>
+        ))}
+      </div>
+    </Sheet>
+  );
+};
+
 // ── Parent Pick Sheet ──
 const ParentPickSheet = ({ onClose, notify }) => {
   const { students } = window.MK_DATA;
@@ -5959,6 +6222,7 @@ const App = () => {
       case 'settings':  return <SettingsSheet      {...common} {...props} />;
       case 'parent-mk': return <ParentCardMk       {...common} {...props} />;
       case 'parent-pick': return <ParentPickSheet  {...common} {...props} />;
+      case 'payments-report': return <PaymentsReportSheet {...common} {...props} />;
       default: return null;
     }
   };
