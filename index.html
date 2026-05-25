@@ -5325,33 +5325,68 @@ const Schedule = ({ goTo }) => {
         </div>
       </div>
 
-      {view === 'month' && (
-        <div className="card" style={{padding: 24, textAlign: 'center'}}>
-          <div className="card-tag" style={{marginBottom: 12}}>месячный вид</div>
-          <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8, maxWidth: 720, margin: '0 auto'}}>
+      {view === 'month' && (() => {
+        // Реальный месяц: учитываем смещение от понедельника + длину месяца + сколько надо до следующего понедельника
+        const monthRef = new Date(_mon);
+        // monthRef сейчас — пн отображаемой недели. Найдём 1-е число текущего месяца на основе сегодняшней даты
+        // (месячный вид показывает текущий календарный месяц, не привязан к weekOffset)
+        const mY = _now.getFullYear();
+        const mM = _now.getMonth();
+        const first = new Date(mY, mM, 1);
+        const daysInMonth = new Date(mY, mM + 1, 0).getDate();
+        const firstDayIdx = (first.getDay() + 6) % 7; // 0=Пн
+        const totalCells = Math.ceil((firstDayIdx + daysInMonth) / 7) * 7;
+        const ruMonthName = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь'][mM];
+        return (
+        <div className="card" style={{padding: 24}}>
+          <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:14}}>
+            <div className="card-tag">месячный вид</div>
+            <div className="font-serif italic" style={{fontSize:18}}>{ruMonthName} {mY}</div>
+          </div>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8}}>
             {['ПН','ВТ','СР','ЧТ','ПТ','СБ','ВС'].map(d => (
-              <div key={d} style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.12em', color:'var(--ink-faint)', padding:'4px 0'}}>{d}</div>
+              <div key={d} style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.12em', color:'var(--ink-faint)', padding:'4px 0', textAlign:'center'}}>{d}</div>
             ))}
-            {Array.from({length: 35}, (_, i) => {
-              const dayNum = i - 3;
-              const isToday = dayNum === 21;
-              const lessonsThisDay = dayNum >= 1 && dayNum <= 31 ? ((dayNum * 3) % 5) + 1 : 0;
+            {Array.from({length: totalCells}, (_, i) => {
+              const dayNum = i - firstDayIdx + 1;
+              const inMonth = dayNum >= 1 && dayNum <= daysInMonth;
+              const cellDate = inMonth ? new Date(mY, mM, dayNum) : null;
+              const isToday = inMonth && dayNum === _now.getDate() && mM === _now.getMonth() && mY === _now.getFullYear();
+              const lessons = inMonth ? window.MK_SCHEDULE.lessonsForDate(cellDate).filter(passFilter) : [];
+              const lessonsCount = lessons.length;
+              const cancelledCount = lessons.filter(l => l.canceled).length;
               return (
-                <div key={i} onClick={() => dayNum >= 1 && dayNum <= 31 && setView('week')}
+                <div
+                  key={i}
+                  onClick={() => {
+                    if (!inMonth) return;
+                    // Переключаем на week-view + перематываем weekOffset на эту дату
+                    const monThis = new Date(cellDate);
+                    monThis.setDate(cellDate.getDate() - ((cellDate.getDay() + 6) % 7));
+                    const monNow = new Date(_now);
+                    monNow.setDate(_now.getDate() - ((_now.getDay() + 6) % 7));
+                    const diffWeeks = Math.round((monThis - monNow) / (7 * 24 * 3600 * 1000));
+                    setWeekOffset(diffWeeks);
+                    setView('week');
+                  }}
                   style={{
                     aspectRatio: '1', display: 'flex', flexDirection: 'column',
                     padding: 8, borderRadius: 8,
                     border: '1px solid ' + (isToday ? 'var(--forest)' : 'var(--rule)'),
                     background: isToday ? 'var(--moss-pale)' : 'var(--paper-card)',
-                    cursor: dayNum >= 1 && dayNum <= 31 ? 'pointer' : 'default',
-                    opacity: dayNum < 1 || dayNum > 31 ? 0.3 : 1,
-                  }}>
+                    cursor: inMonth ? 'pointer' : 'default',
+                    opacity: inMonth ? 1 : 0.25,
+                    transition: 'all .12s',
+                  }}
+                  onMouseEnter={e => { if (inMonth && !isToday) e.currentTarget.style.background = 'var(--paper-deep)'; }}
+                  onMouseLeave={e => { if (inMonth && !isToday) e.currentTarget.style.background = 'var(--paper-card)'; }}
+                >
                   <span style={{fontFamily:'Instrument Serif', fontStyle:'italic', fontSize:18, color: isToday ? 'var(--forest-deep)' : 'var(--ink)'}}>
-                    {dayNum >= 1 && dayNum <= 31 ? dayNum : ''}
+                    {inMonth ? dayNum : ''}
                   </span>
-                  {lessonsThisDay > 0 && dayNum >= 1 && dayNum <= 31 && (
+                  {lessonsCount > 0 && (
                     <span style={{fontFamily:'JetBrains Mono', fontSize:9, color:'var(--ink-faint)', marginTop:'auto', letterSpacing:'.05em'}}>
-                      {lessonsThisDay} ур.
+                      {lessonsCount - cancelledCount} ур.{cancelledCount > 0 ? ` · ${cancelledCount} отм.` : ''}
                     </span>
                   )}
                 </div>
@@ -5359,7 +5394,8 @@ const Schedule = ({ goTo }) => {
             })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {view === 'day' && (() => {
         const _dayCap = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье'][todayDayIdx];
