@@ -2262,9 +2262,8 @@ window.MK_SCHEDULE = (() => {
       if (b.group || !b.studentId) return true;
       const student = (window.MK_STORE?.students || []).find(s => s.id === b.studentId);
       if (!student) return false;
-      // (2) Закрытый абонемент / ended
-      const remaining = (student.pack || 0) - (student.used || 0);
-      if (remaining <= 0 || student.status === 'ended') return false;
+      // (2) Закрытый абонемент — только ручное закрытие учителем
+      if (student.status === 'ended') return false;
       // (1) Дубль с группой
       if (student.groupId) {
         const groupHasSlot = allSlots.some(gb =>
@@ -3517,6 +3516,7 @@ const RenewModal = ({ student, onClose, notify }) => {
       lessons: previewLessons,        // только новые слоты
       pack: packSize,                  // размер нового пакета (не сумма)
       used: 0,                         // счётчик с нуля
+      status: 'active',               // ручная активация
       archivedLessons,                 // история проведённых сохраняется
       ...(payStatus === 'paid' ? { paid: todayHuman } : {}),
     };
@@ -5279,13 +5279,33 @@ const LessonsPane = ({ s, openSheet }) => {
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:20}}>
-        {[['Осталось',left,left<=2?'var(--ochre-deep)':'var(--ink)'],['Проведено',done,'var(--forest)'],['Всего',sub.totalSessions,'var(--ink-faint)']].map(([l,v,c])=>(
+        {[['Осталось',left,left<=0?'var(--berry)':left<=2?'var(--ochre-deep)':'var(--ink)'],['Проведено',done,'var(--forest)'],['Всего',sub.totalSessions,'var(--ink-faint)']].map(([l,v,c])=>(
           <div key={l} style={{background:'var(--paper-deep)',borderRadius:10,padding:'12px 14px'}}>
             <div style={{fontFamily:'JetBrains Mono',fontSize:10,letterSpacing:'.12em',textTransform:'uppercase',color:'var(--ink-faint)',marginBottom:4}}>{l}</div>
             <div style={{fontFamily:'Instrument Serif',fontSize:28,lineHeight:1,color:c}}>{v}</div>
           </div>
         ))}
       </div>
+
+      {sub.status === 'ended' ? (
+        <div style={{marginTop:14, padding:'10px 14px', background:'oklch(0.96 0.02 20)', borderRadius:8, border:'1px solid oklch(0.87 0.06 20)', display:'flex', alignItems:'center', gap:10, fontSize:13, color:'var(--berry)'}}>
+          <span style={{flex:1}}>Абонемент закрыт учителем</span>
+          <button className="btn btn-sm" onClick={() => window.MK_STORE.updateStudent(s.id, d => ({...d, status:'active'}))}>
+            Возобновить
+          </button>
+        </div>
+      ) : (
+        <div style={{marginTop:14, textAlign:'right'}}>
+          <button className="btn btn-sm" style={{color:'var(--berry)', borderColor:'oklch(0.87 0.06 20)'}}
+            onClick={() => {
+              const ok = window.confirm(`Закрыть абонемент «${s.name}»?\nУченик исчезнет из расписания до следующего продления.`);
+              if (!ok) return;
+              window.MK_STORE.updateStudent(s.id, d => ({...d, status:'ended'}));
+            }}>
+            Закрыть абонемент
+          </button>
+        </div>
+      )}
     </div>
 
     <div className="profile-section">
