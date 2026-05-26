@@ -2363,6 +2363,7 @@ window.MK_SCHEDULE = (() => {
       if (student.status === 'ended') continue;
       for (const esub of (student.extraSubs || [])) {
         if (esub.status === 'ended') continue;
+        if (esub.groupId) continue; // группа уже генерирует свой слот
         if (!esub.days || !esub.days.length || !esub.time) continue;
         const [hStr, mStr] = String(esub.time).split(':');
         const startH = +hStr + +mStr / 60;
@@ -3859,27 +3860,44 @@ const AddIndividualLessonModal = ({ student, onClose, notify }) => {
 // ---------- Add extra sub ----------
 const AddExtraSubModal = ({ student, onClose, notify }) => {
   const DAY_LABELS = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
-  const DAY_JS    = [0,1,2,3,4,5,6];
   const _isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   const _todayISO = _isoDate(new Date());
 
-  const [subject, setSubject]   = React.useState('');
-  const [days, setDays]         = React.useState([]);
-  const [time, setTime]         = React.useState('15:00');
-  const [packSize, setPackSize] = React.useState(8);
-  const [price, setPrice]       = React.useState(12800);
-  const [startDate, setStart]   = React.useState(_todayISO);
-  const [payStatus, setPay]     = React.useState('paid');
-  const [payMethod, setMethod]  = React.useState('СБП');
+  const groups = window.MK_STORE.groups || [];
+
+  const [groupId,   setGroupId]  = React.useState('');       // '' = индивидуальный
+  const [subject,   setSubject]  = React.useState('');
+  const [days,      setDays]     = React.useState([]);
+  const [time,      setTime]     = React.useState('15:00');
+  const [packSize,  setPackSize] = React.useState(8);
+  const [price,     setPrice]    = React.useState(12800);
+  const [startDate, setStart]    = React.useState(_todayISO);
+  const [payStatus, setPay]      = React.useState('paid');
+  const [payMethod, setMethod]   = React.useState('СБП');
+
+  const selectedGroup = groups.find(g => g.id === groupId) || null;
+
+  // При выборе группы — подтягиваем расписание и тему
+  const pickGroup = (id) => {
+    setGroupId(id);
+    if (!id) return;
+    const g = groups.find(g => g.id === id);
+    if (!g) return;
+    if (g.days)  setDays(g.days);
+    if (g.time)  setTime(g.time);
+    if (g.focus || g.name) setSubject(g.focus || g.name);
+  };
 
   const toggleDay = (d) => setDays(prev => prev.includes(d) ? prev.filter(x=>x!==d) : [...prev, d]);
+
+  const effectiveDays = selectedGroup ? (selectedGroup.days || days) : days;
 
   const generateLessons = (n, fromISO) => {
     const lessons = [];
     const d = new Date(fromISO + 'T00:00:00');
     let guard = 0;
     while (lessons.length < n && guard < 400) {
-      if (days.includes(d.getDay())) {
+      if (effectiveDays.includes(d.getDay())) {
         const dd = String(d.getDate()).padStart(2,'0');
         const mm = String(d.getMonth()+1).padStart(2,'0');
         lessons.push({ date: `${dd}.${mm}`, status: 'future', note: '' });
@@ -3891,18 +3909,19 @@ const AddExtraSubModal = ({ student, onClose, notify }) => {
   };
 
   const apply = () => {
-    if (!subject.trim()) { notify('Укажите название предмета', 'err'); return; }
-    if (!days.length)    { notify('Выберите хотя бы один день', 'err'); return; }
+    const subjectVal = subject.trim() || (selectedGroup ? (selectedGroup.focus || selectedGroup.name) : '');
+    if (!subjectVal) { notify('Укажите название предмета', 'err'); return; }
+    if (!effectiveDays.length) { notify('Выберите хотя бы один день', 'err'); return; }
     const todayHuman = new Date().toLocaleDateString('ru-RU');
-    const lessons = generateLessons(packSize, startDate);
     const esub = {
-      subject: subject.trim(),
-      days,
-      time,
+      subject: subjectVal,
+      days: effectiveDays,
+      time: selectedGroup ? (selectedGroup.time || time) : time,
       pack: packSize,
       price,
-      lessons,
+      lessons: generateLessons(packSize, startDate),
       status: 'active',
+      ...(groupId ? { groupId } : {}),
       ...(payStatus === 'paid' ? { paid: todayHuman } : {}),
     };
     window.MK_STORE.addExtraSub(student.id, esub);
@@ -3917,22 +3936,47 @@ const AddExtraSubModal = ({ student, onClose, notify }) => {
         <button className="btn btn-sm btn-primary" onClick={apply}><Icon name="check" size={13}/> Добавить</button>
       </>}
     >
+      {/* Выбор группы */}
       <div className="fld">
-        <label>Предмет</label>
-        <input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="Рисование, Труд, Английский…" autoFocus />
-      </div>
-      <div className="fld">
-        <label>Дни занятий</label>
+        <label>Группа</label>
         <div className="choices" style={{flexWrap:'wrap'}}>
-          {[1,2,3,4,5,6,0].map(d => (
-            <button key={d} className={`choice ${days.includes(d)?'on':''}`} onClick={()=>toggleDay(d)}>{DAY_LABELS[d]}</button>
+          <button className={`choice ${groupId===''?'on':''}`} onClick={()=>pickGroup('')}>Индивидуально</button>
+          {groups.map(g => (
+            <button key={g.id} className={`choice ${groupId===g.id?'on':''}`} onClick={()=>pickGroup(g.id)}>
+              {g.name}
+            </button>
           ))}
         </div>
+        {selectedGroup && (
+          <div style={{fontSize:11,color:'var(--ink-faint)',marginTop:6,fontFamily:'JetBrains Mono'}}>
+            {(selectedGroup.days||[]).map(d=>DAY_LABELS[d]).join('/')} · {selectedGroup.time} · {selectedGroup.focus}
+          </div>
+        )}
       </div>
+
+      {/* Предмет — заполняется из группы, но редактируемый */}
       <div className="fld">
-        <label>Время</label>
-        <input type="time" value={time} onChange={e=>setTime(e.target.value)} />
+        <label>Предмет</label>
+        <input value={subject} onChange={e=>setSubject(e.target.value)}
+          placeholder={selectedGroup ? (selectedGroup.focus || selectedGroup.name) : 'Рисование, Труд, Английский…'} />
       </div>
+
+      {/* Дни/время — только для индивидуального */}
+      {!selectedGroup && (<>
+        <div className="fld">
+          <label>Дни занятий</label>
+          <div className="choices" style={{flexWrap:'wrap'}}>
+            {[1,2,3,4,5,6,0].map(d => (
+              <button key={d} className={`choice ${days.includes(d)?'on':''}`} onClick={()=>toggleDay(d)}>{DAY_LABELS[d]}</button>
+            ))}
+          </div>
+        </div>
+        <div className="fld">
+          <label>Время</label>
+          <input type="time" value={time} onChange={e=>setTime(e.target.value)} />
+        </div>
+      </>)}
+
       <div className="fld">
         <label>Размер пакета</label>
         <div className="choices">
