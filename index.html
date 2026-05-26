@@ -2153,7 +2153,7 @@ window.MK_PROFILE = (() => {
   const _load = () => { try { return JSON.parse(localStorage.getItem(MK_PROFILE_KEY) || 'null') || null; } catch { return null; } };
   const _save = (d) => { try { localStorage.setItem(MK_PROFILE_KEY, JSON.stringify(d)); } catch {} };
   const _subs = new Set();
-  let _data = _load() || { name: 'Анна Сергеевна', role: 'репетитор', timezone: 'Москва · GMT+3', defaultPrice: 1600 };
+  let _data = _load() || { name: 'Анна Сергеевна', role: 'репетитор', timezone: 'Москва · GMT+3', defaultPrice: 1600, paymentUrl: '' };
   return {
     get data() { return _data; },
     subscribe(cb) { _subs.add(cb); return () => _subs.delete(cb); },
@@ -4337,6 +4337,7 @@ const SettingsSheet = ({ onClose, notify }) => {
   const [role, setRole] = React.useState(profile.role || '');
   const [timezone, setTimezone] = React.useState(profile.timezone || '');
   const [defaultPrice, setDefaultPrice] = React.useState(profile.defaultPrice || 1600);
+  const [paymentUrl, setPaymentUrl] = React.useState(profile.paymentUrl || '');
 
   const save = () => {
     window.MK_PROFILE.update({
@@ -4344,6 +4345,7 @@ const SettingsSheet = ({ onClose, notify }) => {
       role: role.trim() || 'педагог',
       timezone: timezone.trim(),
       defaultPrice: parseInt(defaultPrice, 10) || 1600,
+      paymentUrl: paymentUrl.trim(),
     });
     notify('Настройки сохранены', 'ok');
     onClose();
@@ -4378,6 +4380,11 @@ const SettingsSheet = ({ onClose, notify }) => {
         <label>Стоимость урока по умолчанию</label>
         <input type="number" value={defaultPrice} onChange={e => setDefaultPrice(e.target.value)} placeholder="1600" />
         <div style={{fontSize:11, color:'var(--ink-faint)', marginTop:4}}>Используется когда у ученика не указана своя цена.</div>
+      </div>
+      <div className="fld">
+        <label>Ссылка для оплаты (СБП / QR)</label>
+        <input value={paymentUrl} onChange={e => setPaymentUrl(e.target.value)} placeholder="https://qr.nspk.ru/..." />
+        <div style={{fontSize:11, color:'var(--ink-faint)', marginTop:4}}>Будет показана родителям в карточке ученика.</div>
       </div>
     </Sheet>
   );
@@ -6820,33 +6827,42 @@ const ParentStandalone = ({ student }) => {
   const sub = window.MK_STORE.getStudent(student.id) || student;
   const lessons = sub.lessons || [];
   const left = lessons.filter(l => l.status === 'future' || l.status === 'sick-wait').length;
-  const evs = (sub.events || []).slice().reverse().slice(0, 5);
   const groupName = window.MK_STORE.getGroupName(student.groupId) || student.group || '';
-  const teacher = window.MK_PROFILE.data.name;
+  const teacherName = (window.MK_PROFILE.data.name || '').trim();
+  const paymentUrl = (window.MK_PROFILE.data.paymentUrl || '').trim();
+
+  // Дата следующей оплаты — последнее занятие в пакете
+  const futureLessons = lessons.filter(l => l.status === 'future' || l.status === 'sick-wait');
+  const nextPayDate = futureLessons.length > 0 ? futureLessons[futureLessons.length - 1].date : null;
+
+  const stampStyle = { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:0 };
+  const dateSpan = (date) => date
+    ? <span style={{fontSize:6.5, fontFamily:"'JetBrains Mono',monospace", fontStyle:'normal', opacity:.85, lineHeight:1, marginTop:1, letterSpacing:'-.01em'}}>{date.slice(0,5)}</span>
+    : null;
 
   return (
     <div style={{minHeight:'100vh', background:'var(--paper)', padding:'40px 20px'}}>
       <div style={{maxWidth: 560, margin: '0 auto'}}>
         <div style={{textAlign:'center', marginBottom:24}}>
-          <div className="font-serif" style={{fontSize:28, color:'var(--forest)'}}>
-            Мой<em style={{fontStyle:'italic'}}>Класс</em>
+          <div className="font-serif" style={{fontSize:24, color:'var(--forest)'}}>
+            {teacherName || 'Педагог'}
           </div>
           <div style={{fontFamily:'JetBrains Mono', fontSize:10, letterSpacing:'.18em', color:'var(--ink-faint)', textTransform:'uppercase', marginTop:4}}>
-            карточка ученика · от {teacher}
+            карточка ученика · только просмотр
           </div>
         </div>
 
         <div className="parent-card" style={{'--bookspine': student.spine || '#1F3A2E'}}>
           <div className="perf"></div>
           <div className="parent-header">
-            <div className="parent-brand">Мой<em>Класс</em><small>только просмотр</small></div>
+            <div className="parent-brand">{teacherName || 'Педагог'}<small>карточка ученика</small></div>
             <div className="parent-stamp">{left>0?'активна':'завершена'}<br/>пакет {left}/{student.pack||lessons.length||8}</div>
           </div>
           <div className="parent-name-row">
             <div className="parent-av">{(student.name||'').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
             <div>
               <div className="parent-name">{student.name.split(' ')[0]} <em>{student.name.split(' ').slice(1).join(' ')}</em></div>
-              <div className="parent-sub">{student.age} лет{groupName ? ` · ${groupName}` : ''}</div>
+              {groupName && <div className="parent-sub">{groupName}</div>}
             </div>
           </div>
 
@@ -6866,30 +6882,61 @@ const ParentStandalone = ({ student }) => {
             </div>
             <div className="parent-stamps">
               {lessons.map((l, i) => {
-                if (l.status === 'done') return <div key={i} className="stamp used">✓</div>;
-                if (l.status === 'future' && i === lessons.findIndex(x => x.status === 'future')) return <div key={i} className="stamp next">{l.date}</div>;
-                if (['transfer','sick','sick-wait'].includes(l.status)) return <div key={i} className="stamp" style={{borderColor:'var(--ochre)',color:'var(--ochre-deep)',fontSize:9}}>↪</div>;
-                if (l.status === 'freeze') return <div key={i} className="stamp" style={{borderColor:'var(--sky)',color:'var(--sky)',fontSize:9}}>❄</div>;
-                return <div key={i} className="stamp"></div>;
+                if (l.status === 'done') return (
+                  <div key={i} className="stamp used" style={stampStyle}>
+                    <span style={{fontSize:12}}>✓</span>
+                    {dateSpan(l.date)}
+                  </div>
+                );
+                if (l.status === 'freeze') return (
+                  <div key={i} className="stamp" style={{...stampStyle, borderColor:'var(--sky)', color:'var(--sky)'}}>
+                    <span style={{fontSize:10}}>❄</span>
+                    {dateSpan(l.date)}
+                  </div>
+                );
+                if (['transfer','sick','sick-wait'].includes(l.status)) return (
+                  <div key={i} className="stamp" style={{...stampStyle, borderColor:'var(--ochre)', color:'var(--ochre-deep)'}}>
+                    <span style={{fontSize:10}}>↪</span>
+                    {dateSpan(l.date)}
+                  </div>
+                );
+                return (
+                  <div key={i} className="stamp next" style={stampStyle}>
+                    {dateSpan(l.date)}
+                  </div>
+                );
               })}
             </div>
-            {left <= 2 && left > 0 && <div style={{marginTop:12, padding:'10px 12px', background:'var(--ochre-pale)', borderRadius:8, fontSize:12.5, color:'var(--ochre-deep)'}}>
+            {nextPayDate && <div style={{marginTop:14, padding:'10px 14px', borderRadius:8, fontSize:13, color:'oklch(0.4 0.18 20)', fontWeight:500, background:'oklch(0.97 0.03 20)', border:'1px solid oklch(0.87 0.09 20)', display:'flex', alignItems:'center', gap:8}}>
+              <span style={{fontSize:16}}>🗓</span>
+              <span>Следующий платёж — <strong>{nextPayDate}</strong></span>
+            </div>}
+            {left <= 2 && left > 0 && <div style={{marginTop:8, padding:'10px 12px', background:'var(--ochre-pale)', borderRadius:8, fontSize:12.5, color:'var(--ochre-deep)'}}>
               ⌛ Абонемент заканчивается — осталось {left} занятий.
             </div>}
           </div>
 
-          {evs.length > 0 && <div className="parent-section">
-            <h4>Последние события</h4>
-            {evs.map((e, i) => {
-              const dc = e.type === 'payment' ? 'var(--forest)' : e.type === 'freeze' ? 'oklch(0.52 0.1 230)' : e.type === 'refund' ? 'var(--berry)' : 'var(--ochre)';
-              return (
-                <div key={i} style={{display:'flex', gap:10, padding:'8px 0', borderTop:i?'1px dashed var(--rule)':'none', alignItems:'flex-start'}}>
-                  <div style={{width:7, height:7, borderRadius:'50%', background:dc, flexShrink:0, marginTop:4}}></div>
-                  <div style={{flex:1, fontSize:13}}>{e.note}</div>
-                  <div style={{fontFamily:'JetBrains Mono', fontSize:10, color:'var(--ink-faint)'}}>{e.date}</div>
-                </div>
-              );
-            })}
+          {paymentUrl && <div className="parent-section">
+            <h4>Оплата</h4>
+            <div style={{textAlign:'center'}}>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(paymentUrl)}`}
+                alt="QR для оплаты"
+                width={180} height={180}
+                style={{borderRadius:12, border:'1px solid var(--rule)', display:'block', margin:'0 auto 14px'}}
+              />
+              <a
+                href={paymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{display:'inline-block', padding:'10px 22px', background:'var(--forest)', color:'#fff', borderRadius:8, fontFamily:"'JetBrains Mono',monospace", fontSize:12, letterSpacing:'.08em', textDecoration:'none', textTransform:'uppercase'}}
+              >
+                Оплатить онлайн
+              </a>
+              <div style={{marginTop:10, fontSize:11, color:'var(--ink-faint)'}}>
+                Отсканируйте QR камерой банковского приложения<br/>или нажмите кнопку выше
+              </div>
+            </div>
           </div>}
 
           <div className="parent-footer">обновлено {new Date().toLocaleDateString('ru-RU')}</div>
