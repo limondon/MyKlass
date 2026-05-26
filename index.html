@@ -1989,6 +1989,25 @@ window.MK_STORE = (() => {
       this.updateStudent(studentId, d => ({ ...d, extraSubs: (d.extraSubs || []).filter(es => es.id !== subId) }));
     },
 
+    // Individual lessons
+    addIndividualLesson(studentId, lesson) {
+      this.updateStudent(studentId, d => ({
+        ...d,
+        individualLessons: [...(d.individualLessons || []), { ...lesson, id: 'il_' + Date.now() }],
+      }));
+    },
+    updateIndividualLesson(studentId, lessonId, updater) {
+      this.updateStudent(studentId, d => ({
+        ...d,
+        individualLessons: (d.individualLessons || []).map(il =>
+          il.id !== lessonId ? il : (typeof updater === 'function' ? updater({...il}) : {...il, ...updater})
+        ),
+      }));
+    },
+    removeIndividualLesson(studentId, lessonId) {
+      this.updateStudent(studentId, d => ({ ...d, individualLessons: (d.individualLessons || []).filter(il => il.id !== lessonId) }));
+    },
+
     // Groups
     setGroups(g) { _data.groups = g; _commit(); },
     updateGroup(id, upd) { _data.groups = _data.groups.map(g => g.id === id ? {...g,...upd} : g); _commit(); },
@@ -2412,7 +2431,16 @@ window.MK_SCHEDULE = (() => {
         .filter(t => t.day === day)
         .map(t => ({ ...t, date: key, canceled: cancelled.has(t.id) }));
       const extras = (ovr.extra || []).map(l => ({ ...l, date: key, day }));
-      return [...fromTemplate, ...extras].sort((a, b) => a.start - b.start);
+      const fromIndividual = (window.MK_STORE?.students || []).flatMap(st =>
+        (st.individualLessons || [])
+          .filter(il => il.date === key)
+          .map(il => {
+            const [hStr, mStr] = String(il.time || '15:00').split(':');
+            const start = +hStr + +mStr / 60;
+            return { id: il.id, start, end: start + 1, studentId: st.id, individualLessonId: il.id, subject: il.subject || 'Разовый урок', tone: 'berry', date: key, day, individual: true };
+          })
+      );
+      return [...fromTemplate, ...extras, ...fromIndividual].sort((a, b) => a.start - b.start);
     },
   };
 })();
@@ -3725,6 +3753,81 @@ const RenewModal = ({ student, onClose, notify }) => {
   );
 };
 
+// ---------- Individual lesson ----------
+const AddIndividualLessonModal = ({ student, onClose, notify }) => {
+  const _isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const [date, setDate]       = React.useState(_isoDate(new Date()));
+  const [time, setTime]       = React.useState('15:00');
+  const [subject, setSubject] = React.useState('');
+  const [price, setPrice]     = React.useState(1600);
+  const [payStatus, setPay]   = React.useState('paid');
+  const [payMethod, setMethod]= React.useState('СБП');
+  const [note, setNote]       = React.useState('');
+
+  const apply = () => {
+    const todayHuman = new Date().toLocaleDateString('ru-RU');
+    window.MK_STORE.addIndividualLesson(student.id, {
+      date, time,
+      subject: subject.trim() || 'Разовый урок',
+      price,
+      status: 'future',
+      note: note.trim(),
+      ...(payStatus === 'paid' ? { paid: todayHuman, payMethod } : {}),
+    });
+    notify(`Разовый урок записан`, 'ok');
+    onClose();
+  };
+
+  return (
+    <Modal eyebrow={student.short} title="Разовый" titleEm="урок" onClose={onClose}
+      foot={<>
+        <button className="btn btn-sm" onClick={onClose}>Отмена</button>
+        <button className="btn btn-sm btn-primary" onClick={apply}><Icon name="check" size={13}/> Записать</button>
+      </>}
+    >
+      <div className="fld">
+        <label>Предмет / тема</label>
+        <input value={subject} onChange={e=>setSubject(e.target.value)} placeholder="Консультация, Пробный урок…" autoFocus />
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+        <div className="fld">
+          <label>Дата</label>
+          <input type="date" value={date} onChange={e=>setDate(e.target.value)} />
+        </div>
+        <div className="fld">
+          <label>Время</label>
+          <input type="time" value={time} onChange={e=>setTime(e.target.value)} />
+        </div>
+      </div>
+      <div className="fld">
+        <label>Стоимость (₽)</label>
+        <input type="number" value={price} onChange={e=>setPrice(+e.target.value)} min={0} step={100} />
+      </div>
+      <div className="fld">
+        <label>Оплата</label>
+        <div className="choices">
+          <button className={`choice ${payStatus==='paid'?'on':''}`} onClick={()=>setPay('paid')}>✓ Оплачено</button>
+          <button className={`choice ${payStatus==='pending'?'on':''}`} onClick={()=>setPay('pending')}>⌛ Ждёт оплаты</button>
+        </div>
+      </div>
+      {payStatus === 'paid' && (
+        <div className="fld">
+          <label>Способ оплаты</label>
+          <div className="choices">
+            {['СБП','Карта','Наличные'].map(m=>(
+              <button key={m} className={`choice ${payMethod===m?'on':''}`} onClick={()=>setMethod(m)}>{m}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="fld">
+        <label>Комментарий</label>
+        <input value={note} onChange={e=>setNote(e.target.value)} placeholder="Необязательно" />
+      </div>
+    </Modal>
+  );
+};
+
 // ---------- Add extra sub ----------
 const AddExtraSubModal = ({ student, onClose, notify }) => {
   const DAY_LABELS = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
@@ -4838,7 +4941,7 @@ Object.assign(window, {
   AppCtx, AppProvider, useApp,
   Sheet, Modal,
   RecordLessonSheet, LessonDetailSheet, ContactSheet,
-  RenewModal, RenewExtraSubModal, AddExtraSubModal, AlertModal, NotifSheet, SearchSheet,
+  RenewModal, RenewExtraSubModal, AddExtraSubModal, AddIndividualLessonModal, AlertModal, NotifSheet, SearchSheet,
   FilterSheet, GroupSheet, ArchiveSheet, SettingsSheet,
   MarkPicker,
 });
@@ -5422,11 +5525,51 @@ const OverviewPane = ({ s, left, openSheet, notify, skillsStore }) => {
       {(_storedS?.extraSubs || []).map(esub => (
         <ExtraPackCard key={esub.id} student={_storedS} esub={esub} openSheet={openSheet} />
       ))}
-      <div style={{marginTop:12, textAlign:'right'}}>
+      <div style={{marginTop:12, display:'flex', gap:8, justifyContent:'flex-end'}}>
+        <button className="btn btn-sm" onClick={() => openSheet('add-individual', { student: _storedS || s })}>
+          + Разовый урок
+        </button>
         <button className="btn btn-sm" onClick={() => openSheet('add-sub', { student: _storedS || s })}>
           + Добавить абонемент
         </button>
       </div>
+
+      {/* Разовые уроки */}
+      {((_storedS?.individualLessons) || []).length > 0 && (
+        <div style={{marginTop:18}}>
+          <div className="section-h">
+            <h3>Разовые <em>уроки</em></h3>
+            <span className="tag">{(_storedS.individualLessons||[]).length} шт.</span>
+          </div>
+          <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:8}}>
+            {(_storedS.individualLessons||[]).slice().reverse().map(il => {
+              const [yyyy,mm,dd] = il.date.split('-');
+              const dateLabel = `${dd}.${mm}.${yyyy}`;
+              const statusColors = { future:'var(--ink-faint)', done:'var(--forest)', absent:'var(--berry)', 'teacher-cancel':'var(--ink-faint)' };
+              const statusLabels = { future:'Запланировано', done:'Проведено', absent:'Не пришёл', 'teacher-cancel':'Отменено педагогом' };
+              return (
+                <div key={il.id} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',background:'var(--paper-deep)',borderRadius:10,border:'1px solid var(--rule)'}}>
+                  <div style={{width:8,height:8,borderRadius:'50%',background:statusColors[il.status]||'var(--ink-faint)',flexShrink:0}}></div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:14}}>{il.subject || 'Разовый урок'}</div>
+                    <div style={{fontFamily:'JetBrains Mono',fontSize:10,color:'var(--ink-faint)',marginTop:2}}>
+                      {dateLabel} · {il.time}{il.price ? ` · ${il.price.toLocaleString('ru-RU')} ₽` : ''}
+                      {il.paid ? ' · оплачено' : il.paid === undefined && il.status !== 'future' ? '' : ' · ждёт оплаты'}
+                    </div>
+                  </div>
+                  <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                    <span style={{fontSize:11,color:statusColors[il.status]||'var(--ink-faint)'}}>{statusLabels[il.status]||il.status}</span>
+                    {il.status === 'future' && (
+                      <button className="btn btn-sm" style={{padding:'3px 8px',fontSize:11}} onClick={() => window.MK_STORE.updateIndividualLesson((_storedS||s).id, il.id, d=>({...d,status:'done'}))}>✓</button>
+                    )}
+                    <button className="btn btn-sm" style={{padding:'3px 8px',fontSize:11,color:'var(--berry)'}} onClick={() => window.MK_STORE.removeIndividualLesson((_storedS||s).id, il.id)}>×</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {!hidden ? (
         <>
@@ -7663,9 +7806,10 @@ const App = () => {
       case 'record':    return <RecordLessonSheet  {...common} {...props} />;
       case 'lesson':    return <LessonDetailSheet  {...common} {...props} />;
       case 'contact':   return <ContactSheet       {...common} {...props} />;
-      case 'renew':       return <RenewModal         {...common} {...props} />;
-      case 'renew-extra': return <RenewExtraSubModal {...common} {...props} />;
-      case 'add-sub':     return <AddExtraSubModal   {...common} {...props} />;
+      case 'renew':         return <RenewModal              {...common} {...props} />;
+      case 'renew-extra':   return <RenewExtraSubModal      {...common} {...props} />;
+      case 'add-sub':       return <AddExtraSubModal        {...common} {...props} />;
+      case 'add-individual':return <AddIndividualLessonModal {...common} {...props} />;
       case 'alert':     return <AlertModal         {...common} {...props} />;
       case 'notif':     return <NotifSheet         {...common} {...props} />;
       case 'search':    return <SearchSheet        {...common} {...props} />;
