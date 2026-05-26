@@ -1887,12 +1887,44 @@ window.MK_STORE = (() => {
   const load = () => { try { return JSON.parse(localStorage.getItem(MK_LS_KEY)||'null'); } catch { return null; } };
   const save = (d) => { try { localStorage.setItem(MK_LS_KEY, JSON.stringify(d)); } catch {} };
 
-  // Авто-пересчёт used из lessons[] (status==='done').
-  // Поле used хранилось отдельно и устаревало — теперь синхронизируется.
+  // Авто-пересчёт used из lessons[]. done + absent = занятие состоялось/сгорело.
+  // Если все будущие уроки исчерпаны и есть queuedPack — активируем его автоматически.
   const _syncUsed = (s) => {
     if (!s || !s.lessons) return s;
-    const done = s.lessons.filter(l => l && l.status === 'done').length;
-    return { ...s, used: done };
+    const used = s.lessons.filter(l => l && (l.status === 'done' || l.status === 'absent')).length;
+    let result = { ...s, used };
+    if (result.queuedPack) {
+      const hasFuture = result.lessons.some(l => l.status === 'future' || l.status === 'sick-wait');
+      if (!hasFuture) {
+        const qp = result.queuedPack;
+        const targetDays = (result.days && result.days.length) ? result.days : [1,3,5];
+        const newLessons = [];
+        const d = new Date(qp.startDate + 'T00:00:00');
+        let guard = 0;
+        while (newLessons.length < qp.packSize && guard < 400) {
+          if (targetDays.includes(d.getDay())) {
+            const dd = String(d.getDate()).padStart(2,'0');
+            const mm = String(d.getMonth()+1).padStart(2,'0');
+            newLessons.push({ date: `${dd}.${mm}`, status: 'future', note: '' });
+          }
+          d.setDate(d.getDate() + 1);
+          guard++;
+        }
+        const oldDone = result.lessons.filter(l => l.status === 'done' || l.status === 'absent');
+        result = {
+          ...result,
+          lessons: newLessons,
+          pack: qp.packSize,
+          used: 0,
+          status: 'active',
+          archivedLessons: [...(result.archivedLessons || []), ...oldDone],
+          events: [...(result.events || []), ...(qp.events || [])],
+          ...(qp.paid ? { paid: qp.paid } : {}),
+          queuedPack: null,
+        };
+      }
+    }
+    return result;
   };
 
   let _data = load();
@@ -2190,16 +2222,19 @@ window.MK_PROFILE = (() => {
 // ── Lesson statuses (used by per-student & by group bulk conduct UIs) ──
 window.MK_LESSON_LABELS = {
   future: 'Запланировано', done: 'Проведено', transfer: 'Отработка',
-  sick: 'Перенос', 'sick-wait': 'Жду справку', freeze: 'Заморожено', refund: 'Возврат'
+  sick: 'Перенос', 'sick-wait': 'Жду справку', freeze: 'Заморожено', refund: 'Возврат',
+  absent: 'Не пришёл', 'teacher-cancel': 'Перенос педагогом',
 };
 window.MK_LESSON_STATUSES = [
-  { k:'done',      label:'✓ Проведено',              color:'var(--forest)' },
-  { k:'future',    label:'○ Запланировано',          color:'var(--ink-faint)' },
-  { k:'transfer',  label:'↪ Отработка',              color:'var(--ochre-deep)' },
-  { k:'sick-wait', label:'🤒 Болезнь — жду справку', color:'var(--ochre-deep)' },
-  { k:'sick',      label:'📋 Болезнь — перенос',     color:'var(--ochre-deep)' },
-  { k:'freeze',    label:'❄ Заморожено',             color:'var(--sky)' },
-  { k:'refund',    label:'↩ Возврат',                color:'var(--berry)' },
+  { k:'done',           label:'✓ Проведено',              color:'var(--forest)' },
+  { k:'future',         label:'○ Запланировано',          color:'var(--ink-faint)' },
+  { k:'absent',         label:'🚫 Не пришёл',             color:'var(--ochre-deep)' },
+  { k:'teacher-cancel', label:'🏫 Перенос педагогом',     color:'var(--ink-faint)' },
+  { k:'transfer',       label:'↪ Отработка',              color:'var(--ochre-deep)' },
+  { k:'sick-wait',      label:'🤒 Болезнь — жду справку', color:'var(--ochre-deep)' },
+  { k:'sick',           label:'📋 Болезнь — перенос',     color:'var(--ochre-deep)' },
+  { k:'freeze',         label:'❄ Заморожено',             color:'var(--sky)' },
+  { k:'refund',         label:'↩ Возврат',                color:'var(--berry)' },
 ];
 
 // ── Schedule overrides (per-date cancellations + extra lessons) ──
@@ -3464,16 +3499,31 @@ const ContactSheet = ({ student, onClose, notify }) => (
 // ---------- Renew pack ----------
 const RenewModal = ({ student, onClose, notify }) => {
   const [packSize, setPackSize] = React.useState(8);
-  const _todayISO = (() => { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
-  const [startDate, setStartDate] = React.useState(_todayISO);
-  const [payStatus, setPayStatus] = React.useState('paid'); // 'paid' | 'pending'
-  const [payMethod, setPayMethod] = React.useState('СБП');
   const prices = { 4: 6400, 6: 9600, 8: 12800, 12: 19200 };
+
+  // Есть ли ещё будущие уроки в текущем пакете?
+  const futureLessons = (student.lessons || []).filter(l => l.status === 'future' || l.status === 'sick-wait');
+  const hasFuture = futureLessons.length > 0;
+
+  // Дефолтная дата старта: если есть будущие уроки — день после последнего, иначе сегодня
+  const _isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const _todayISO = _isoDate(new Date());
+  const _defaultStart = (() => {
+    if (!hasFuture) return _todayISO;
+    const last = futureLessons[futureLessons.length - 1].date; // DD.MM
+    const [dd, mm] = last.split('.');
+    const d = new Date(`${new Date().getFullYear()}-${mm}-${dd}T00:00:00`);
+    d.setDate(d.getDate() + 1);
+    return _isoDate(d);
+  })();
+
+  const [startDate, setStartDate] = React.useState(_defaultStart);
+  const [payStatus, setPayStatus] = React.useState('paid');
+  const [payMethod, setPayMethod] = React.useState('СБП');
 
   // Какие дни недели у ученика. Если пусто — Пн/Ср/Пт по умолчанию
   const targetDays = (student.days && student.days.length) ? student.days : [1,3,5];
 
-  // Генератор N будущих слотов начиная со startDate
   const generateLessons = (n, fromDateISO) => {
     const lessons = [];
     const d = new Date(fromDateISO + 'T00:00:00');
@@ -3502,33 +3552,51 @@ const RenewModal = ({ student, onClose, notify }) => {
     const noteSuffix = payStatus === 'paid'
       ? `Оплата · ${packSize} занятий — ${amount.toLocaleString('ru-RU')} ₽ · ${payMethod}`
       : `Ждёт оплаты · ${packSize} занятий — ${amount.toLocaleString('ru-RU')} ₽`;
-    const events = [...(stored.events || []), {
-      type: eventType,
-      date: todayHuman,
-      note: noteSuffix,
-    }];
-    // Архивируем done-уроки (для истории), новые слоты заменяют текущие
-    const oldLessons = stored.lessons || [];
-    const oldDone = oldLessons.filter(l => l.status === 'done');
-    const archivedLessons = [...(stored.archivedLessons || []), ...oldDone];
-    const update = {
-      ...stored,
-      lessons: previewLessons,        // только новые слоты
-      pack: packSize,                  // размер нового пакета (не сумма)
-      used: 0,                         // счётчик с нуля
-      status: 'active',               // ручная активация
-      archivedLessons,                 // история проведённых сохраняется
-      ...(payStatus === 'paid' ? { paid: todayHuman } : {}),
-    };
-    update.events = events;
-    window.MK_STORE.updateStudent(student.id, update);
+    const newEvent = { type: eventType, date: todayHuman, note: noteSuffix };
+
+    if (hasFuture) {
+      // Очередь: текущий пакет ещё идёт — сохраняем следующий, он стартует автоматически
+      window.MK_STORE.updateStudent(student.id, d => ({
+        ...d,
+        events: [...(d.events || []), newEvent],
+        queuedPack: {
+          packSize,
+          startDate,
+          ...(payStatus === 'paid' ? { paid: todayHuman } : {}),
+          events: [newEvent],
+        },
+      }));
+      notify(
+        payStatus === 'paid'
+          ? `Пакет ${packSize} уроков в очереди · ${amount.toLocaleString('ru-RU')} ₽ оплачено`
+          : `Пакет ${packSize} уроков в очереди · ждём оплату`,
+        'ok'
+      );
+    } else {
+      // Немедленная активация: будущих уроков нет
+      const oldLessons = stored.lessons || [];
+      const oldDone = oldLessons.filter(l => l.status === 'done' || l.status === 'absent');
+      const archivedLessons = [...(stored.archivedLessons || []), ...oldDone];
+      const update = {
+        ...stored,
+        lessons: previewLessons,
+        pack: packSize,
+        used: 0,
+        status: 'active',
+        archivedLessons,
+        ...(payStatus === 'paid' ? { paid: todayHuman } : {}),
+        events: [...(stored.events || []), newEvent],
+        queuedPack: null,
+      };
+      window.MK_STORE.updateStudent(student.id, update);
+      notify(
+        payStatus === 'paid'
+          ? `Новый пакет ${packSize} уроков · ${amount.toLocaleString('ru-RU')} ₽ оплачено`
+          : `Новый пакет ${packSize} уроков · ждём оплату ${amount.toLocaleString('ru-RU')} ₽`,
+        'ok'
+      );
+    }
     onClose();
-    notify(
-      payStatus === 'paid'
-        ? `Новый пакет ${packSize} уроков · ${amount.toLocaleString('ru-RU')} ₽ оплачено`
-        : `Новый пакет ${packSize} уроков · ждём оплату ${amount.toLocaleString('ru-RU')} ₽`,
-      'ok'
-    );
   };
 
   return (
@@ -3540,10 +3608,18 @@ const RenewModal = ({ student, onClose, notify }) => {
       foot={<>
         <button className="btn btn-sm" onClick={onClose}>Отмена</button>
         <button className="btn btn-sm btn-primary" onClick={apply}>
-          <Icon name="check" size={13}/> {payStatus === 'paid' ? 'Продлить и записать оплату' : 'Продлить (без оплаты)'}
+          <Icon name="check" size={13}/>
+          {hasFuture
+            ? (payStatus === 'paid' ? 'В очередь и записать оплату' : 'В очередь (без оплаты)')
+            : (payStatus === 'paid' ? 'Продлить и записать оплату' : 'Продлить (без оплаты)')}
         </button>
       </>}
     >
+      {hasFuture && (
+        <div style={{padding:'8px 12px', background:'var(--sky-pale)', border:'1px solid var(--sky)', borderRadius:8, fontSize:12, color:'var(--ink-soft)', marginBottom:4}}>
+          Текущий пакет ещё идёт — новый встанет в очередь и стартует автоматически после последнего урока
+        </div>
+      )}
       <div className="fld">
         <label>Размер пакета</label>
         <div className="choices">
@@ -3555,7 +3631,7 @@ const RenewModal = ({ student, onClose, notify }) => {
         </div>
       </div>
       <div className="fld">
-        <label>Дата активации (первый урок)</label>
+        <label>{hasFuture ? 'Дата старта следующего пакета' : 'Дата активации (первый урок)'}</label>
         <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
       </div>
       <div className="fld">
@@ -3579,9 +3655,7 @@ const RenewModal = ({ student, onClose, notify }) => {
         <div className="k">Текущий пакет</div>
         <div className="v">
           {student.used} из {student.pack} использовано · осталось {student.pack - student.used}
-          <div style={{fontSize:11, color:'var(--ochre-deep)', marginTop:4, fontStyle:'italic'}}>
-            при продлении закроется и начнётся новый на {packSize} уроков
-          </div>
+          {hasFuture && <div style={{fontSize:11, color:'var(--sky)', marginTop:4, fontStyle:'italic'}}>следующий {packSize} уроков стартует после последнего урока текущего</div>}
         </div>
       </div>
       <div className="kv-row">
@@ -3593,7 +3667,7 @@ const RenewModal = ({ student, onClose, notify }) => {
         <div className="v font-mono" style={{fontWeight:600, fontSize:15}}>{prices[packSize].toLocaleString('ru-RU')} ₽</div>
       </div>
       <div className="kv-row">
-        <div className="k">Последний урок</div>
+        <div className="k">Последний урок нового пакета</div>
         <div className="v">примерно {lastDate}</div>
       </div>
     </Modal>
@@ -5370,22 +5444,14 @@ const LessonsPane = ({ s, openSheet }) => {
         ))}
       </div>
 
-      {sub.status === 'ended' ? (
-        <div style={{marginTop:14, padding:'10px 14px', background:'oklch(0.96 0.02 20)', borderRadius:8, border:'1px solid oklch(0.87 0.06 20)', display:'flex', alignItems:'center', gap:10, fontSize:13, color:'var(--berry)'}}>
-          <span style={{flex:1}}>Абонемент закрыт учителем</span>
-          <button className="btn btn-sm" onClick={() => window.MK_STORE.updateStudent(s.id, d => ({...d, status:'active'}))}>
-            Возобновить
-          </button>
-        </div>
-      ) : (
-        <div style={{marginTop:14, textAlign:'right'}}>
-          <button className="btn btn-sm" style={{color:'var(--berry)', borderColor:'oklch(0.87 0.06 20)'}}
-            onClick={() => {
-              const ok = window.confirm(`Закрыть абонемент «${s.name}»?\nУченик исчезнет из расписания до следующего продления.`);
-              if (!ok) return;
-              window.MK_STORE.updateStudent(s.id, d => ({...d, status:'ended'}));
-            }}>
-            Закрыть абонемент
+      {sub.queuedPack && (
+        <div style={{marginTop:14, padding:'10px 14px', background:'var(--sky-pale)', borderRadius:8, border:'1px solid var(--sky)', display:'flex', alignItems:'center', gap:10, fontSize:13}}>
+          <span style={{flex:1}}>
+            📦 В очереди: <strong>{sub.queuedPack.packSize} уроков</strong> · старт с {sub.queuedPack.startDate.split('-').reverse().slice(0,2).join('.')}
+            {sub.queuedPack.paid ? ' · оплачено' : ' · ждёт оплаты'}
+          </span>
+          <button className="btn btn-sm" style={{color:'var(--berry)'}} onClick={() => window.MK_STORE.updateStudent(s.id, d => ({...d, queuedPack: null}))}>
+            Отменить
           </button>
         </div>
       )}
