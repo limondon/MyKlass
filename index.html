@@ -3511,69 +3511,97 @@ const LessonDetailSheet = ({ lesson, onClose, notify }) => {
 };
 
 // ---------- Contact parent ----------
-const ContactSheet = ({ student, onClose, notify }) => (
-  <Sheet
-    eyebrow="связь с родителем"
-    title={student.parent.split(' ')[0]}
-    titleEm={student.parent.split(' ')[1]}
-    onClose={onClose}
-  >
-    <div className="kv-row">
-      <div className="k">Ученик</div>
-      <div className="v">{student.name}{getAge(student) != null ? ` · ${getAge(student)} лет` : ''}</div>
-    </div>
-    <div className="kv-row">
-      <div className="k">Телефон</div>
-      <div className="v font-mono">{student.phone}</div>
-    </div>
-    <div style={{marginTop: 18}}>
-      <div className="eyebrow" style={{fontFamily:'JetBrains Mono', fontSize: 10.5, letterSpacing: '.16em', color: 'var(--ink-faint)', textTransform: 'uppercase', marginBottom: 10}}>
-        как связаться
-      </div>
-      <div className="contact-actions">
-        {(() => {
-          const cleanPhone = (student.phone || '').replace(/[^\d+]/g, '');
-          const actions = [
-            {
-              ic: 'phone', name: 'Позвонить', sub: student.phone,
-              run: () => { window.location.href = `tel:${cleanPhone}`; notify('Открываю набор номера', 'ok'); },
-            },
-            {
-              ic: 'share', name: 'WhatsApp', sub: 'мессенджер',
-              run: () => {
-                const num = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone.replace(/^8/, '7');
-                window.open(`https://wa.me/${num}`, '_blank');
-                notify('Открываю WhatsApp', 'ok');
-              },
-            },
-            {
-              ic: 'edit', name: 'Скопировать', sub: 'номер в буфер',
-              run: () => {
-                if (navigator.clipboard) {
-                  navigator.clipboard.writeText(student.phone).then(
-                    () => notify('Номер скопирован', 'ok'),
-                    () => notify('Не удалось скопировать', 'err')
-                  );
-                } else notify('Буфер обмена недоступен', 'err');
-              },
-            },
-            {
-              ic: 'bell', name: 'Напомнить мне', sub: 'через 1 час',
-              run: () => { notify('Напоминание поставлено', 'ok'); },
-            },
-          ];
-          return actions.map(a => (
-            <button key={a.name} className="contact-act" onClick={() => a.run()}>
+const ContactSheet = ({ student, contact, onClose, notify }) => {
+  // contact может прийти как пропс (конкретный контакт) или fallback на legacy поля
+  const ct = contact || { name: student.parent || '', phone: student.phone || '', role: '' };
+  const nameParts = (ct.name || '').split(' ');
+  const cleanPhone = (ct.phone || '').replace(/[^\d+]/g, '');
+  const actions = [
+    { ic:'phone', name:'Позвонить', sub: ct.phone,
+      run: () => { window.location.href = `tel:${cleanPhone}`; notify('Открываю набор номера', 'ok'); } },
+    { ic:'share', name:'WhatsApp', sub:'мессенджер',
+      run: () => { const n = cleanPhone.startsWith('+') ? cleanPhone.slice(1) : cleanPhone.replace(/^8/,'7'); window.open(`https://wa.me/${n}`,'_blank'); notify('Открываю WhatsApp','ok'); } },
+    { ic:'edit', name:'Скопировать', sub:'номер в буфер',
+      run: () => { if (navigator.clipboard) { navigator.clipboard.writeText(ct.phone).then(()=>notify('Номер скопирован','ok'),()=>notify('Не удалось скопировать','err')); } else notify('Буфер обмена недоступен','err'); } },
+    { ic:'bell', name:'Напомнить мне', sub:'через 1 час',
+      run: () => notify('Напоминание поставлено','ok') },
+  ];
+  return (
+    <Sheet eyebrow={ct.role || 'связь с родителем'} title={nameParts[0]} titleEm={nameParts.slice(1).join(' ')} onClose={onClose}>
+      <div className="kv-row"><div className="k">Ученик</div><div className="v">{student.name}{getAge(student)!=null?` · ${getAge(student)} лет`:''}</div></div>
+      <div className="kv-row"><div className="k">Телефон</div><div className="v font-mono">{ct.phone}</div></div>
+      <div style={{marginTop:18}}>
+        <div className="eyebrow" style={{fontFamily:'JetBrains Mono',fontSize:10.5,letterSpacing:'.16em',color:'var(--ink-faint)',textTransform:'uppercase',marginBottom:10}}>как связаться</div>
+        <div className="contact-actions">
+          {actions.map(a => (
+            <button key={a.name} className="contact-act" onClick={()=>a.run()}>
               <span className="ic-circle"><Icon name={a.ic} size={15}/></span>
               <span className="name">{a.name}</span>
               <span className="sub">{a.sub}</span>
             </button>
-          ));
-        })()}
+          ))}
+        </div>
       </div>
-    </div>
-  </Sheet>
-);
+    </Sheet>
+  );
+};
+
+// ---------- Contact edit modal ----------
+const ContactEditModal = ({ student, contact, onClose, notify }) => {
+  // contact = null → добавляем новый; иначе редактируем
+  const isNew = !contact;
+  const [name,  setName]  = React.useState(contact?.name  || '');
+  const [phone, setPhone] = React.useState(contact?.phone || '');
+  const [role,  setRole]  = React.useState(contact?.role  || '');
+
+  const _getContacts = (s) => {
+    if (s.contacts && s.contacts.length) return s.contacts;
+    if (s.parent) return [{ id: 'ct_main', name: s.parent, phone: s.phone || '', role: 'родитель' }];
+    return [];
+  };
+
+  const save = () => {
+    if (!name.trim()) { notify('Укажите имя', 'err'); return; }
+    const stored = window.MK_STORE.getStudent(student.id);
+    const existing = _getContacts(stored);
+    let updated;
+    if (isNew) {
+      updated = [...existing, { id: 'ct_' + Date.now(), name: name.trim(), phone: phone.trim(), role: role.trim() }];
+    } else {
+      updated = existing.map(c => c.id === contact.id ? { ...c, name: name.trim(), phone: phone.trim(), role: role.trim() } : c);
+    }
+    window.MK_STORE.updateStudent(student.id, d => ({ ...d, contacts: updated }));
+    notify(isNew ? 'Контакт добавлен' : 'Контакт обновлён', 'ok');
+    onClose();
+  };
+
+  return (
+    <Modal eyebrow={student.short} title={isNew ? 'Добавить' : 'Изменить'} titleEm="контакт" onClose={onClose}
+      foot={<>
+        <button className="btn btn-sm" onClick={onClose}>Отмена</button>
+        <button className="btn btn-sm btn-primary" onClick={save}><Icon name="check" size={13}/> Сохранить</button>
+      </>}
+    >
+      <div className="fld">
+        <label>Имя</label>
+        <input value={name} onChange={e=>setName(e.target.value)} placeholder="Мария Соколова" autoFocus />
+      </div>
+      <div className="fld">
+        <label>Телефон</label>
+        <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+7 900 000 00 00" type="tel" />
+      </div>
+      <div className="fld">
+        <label>Роль</label>
+        <div className="choices" style={{flexWrap:'wrap'}}>
+          {['мама','папа','бабушка','дедушка','опекун'].map(r => (
+            <button key={r} className={`choice ${role===r?'on':''}`} onClick={()=>setRole(r)}>{r}</button>
+          ))}
+        </div>
+        <input value={role} onChange={e=>setRole(e.target.value)} placeholder="или введите свою роль" style={{marginTop:8}} />
+      </div>
+    </Modal>
+  );
+};
 
 // ---------- Renew pack ----------
 const RenewModal = ({ student, onClose, notify }) => {
@@ -4941,7 +4969,7 @@ Object.assign(window, {
   AppCtx, AppProvider, useApp,
   Sheet, Modal,
   RecordLessonSheet, LessonDetailSheet, ContactSheet,
-  RenewModal, RenewExtraSubModal, AddExtraSubModal, AddIndividualLessonModal, AlertModal, NotifSheet, SearchSheet,
+  RenewModal, RenewExtraSubModal, AddExtraSubModal, AddIndividualLessonModal, ContactEditModal, AlertModal, NotifSheet, SearchSheet,
   FilterSheet, GroupSheet, ArchiveSheet, SettingsSheet,
   MarkPicker,
 });
@@ -6497,6 +6525,15 @@ const SkillBars = ({ s }) => (
 );
 
 const ParentBlock = ({ s, openSheet, notify }) => {
+  const stored = window.MK_STORE.getStudent(s.id) || s;
+
+  // Автомиграция: если нет contacts[], берём legacy parent+phone
+  const contacts = (() => {
+    if (stored.contacts && stored.contacts.length) return stored.contacts;
+    if (stored.parent) return [{ id: 'ct_main', name: stored.parent, phone: stored.phone || '', role: 'родитель' }];
+    return [];
+  })();
+
   const shareLink = async () => {
     const base = window.location.origin + window.location.pathname;
     const url = base + '?parent=' + s.id;
@@ -6506,41 +6543,49 @@ const ParentBlock = ({ s, openSheet, notify }) => {
           () => notify && notify('Ссылка скопирована — отправьте её родителю', 'ok'),
           () => prompt('Скопируйте ссылку вручную:', url)
         );
-      } else {
-        prompt('Скопируйте ссылку вручную:', url);
-      }
+      } else { prompt('Скопируйте ссылку вручную:', url); }
     };
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: `МойКласс · ${s.name}`,
-          text: `Карточка ученика «${s.name}» — посмотрите остаток пакета и историю событий.`,
-          url,
-        });
-        notify && notify('Ссылка отправлена', 'ok');
-        return;
-      } catch (err) {
-        if (err && err.name === 'AbortError') return;
-        fallback();
-        return;
-      }
+        await navigator.share({ title: `МойКласс · ${s.name}`, text: `Карточка ученика «${s.name}»`, url });
+        notify && notify('Ссылка отправлена', 'ok'); return;
+      } catch (err) { if (err?.name === 'AbortError') return; fallback(); return; }
     }
     fallback();
   };
 
+  const removeContact = (ctId) => {
+    if (!window.confirm('Удалить этот контакт?')) return;
+    const next = contacts.filter(c => c.id !== ctId);
+    window.MK_STORE.updateStudent(s.id, d => ({ ...d, contacts: next }));
+  };
+
   return (
     <div style={{display:'flex', flexDirection:'column', gap:10}}>
-      <div style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'var(--paper-deep)', borderRadius:10}}>
-        <div style={{width:36, height:36, borderRadius:'50%', background:'var(--ochre-pale)', color:'var(--ochre-deep)', display:'grid', placeItems:'center', fontFamily:'Instrument Serif', fontStyle:'italic', fontSize:16}}>{Initials(s.parent)}</div>
-        <div style={{flex:1}}>
-          <div style={{fontWeight:600, fontSize:13.5}}>{s.parent}</div>
-          <div style={{fontFamily:'JetBrains Mono', fontSize:11, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{s.phone}</div>
+      {contacts.map(ct => (
+        <div key={ct.id} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'var(--paper-deep)', borderRadius:10}}>
+          <div style={{width:36, height:36, borderRadius:'50%', background:'var(--ochre-pale)', color:'var(--ochre-deep)', display:'grid', placeItems:'center', fontFamily:'Instrument Serif', fontStyle:'italic', fontSize:16, flexShrink:0}}>{Initials(ct.name)}</div>
+          <div style={{flex:1, minWidth:0}}>
+            <div style={{fontWeight:600, fontSize:13.5}}>{ct.name}{ct.role ? <span style={{fontWeight:400, fontSize:11, color:'var(--ink-faint)', marginLeft:6}}>{ct.role}</span> : null}</div>
+            <div style={{fontFamily:'JetBrains Mono', fontSize:11, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{ct.phone || '—'}</div>
+          </div>
+          <div style={{display:'flex', gap:4}}>
+            <button className="icon-btn" onClick={() => openSheet && openSheet('contact-edit', { student: stored, contact: ct })} aria-label="Изменить"><Icon name="edit" size={13}/></button>
+            <button className="icon-btn" onClick={() => openSheet && openSheet('contact', { student: stored, contact: ct })} aria-label="Связь"><Icon name="phone" size={14}/></button>
+            {contacts.length > 1 && (
+              <button className="icon-btn" style={{color:'var(--berry)'}} onClick={() => removeContact(ct.id)} aria-label="Удалить">×</button>
+            )}
+          </div>
         </div>
-        <button className="icon-btn" onClick={() => openSheet && openSheet('contact', { student: s })} aria-label="Связь"><Icon name="phone" size={14}/></button>
+      ))}
+      <div style={{display:'flex', gap:8}}>
+        <button className="btn btn-sm" style={{flex:1, justifyContent:'center'}} onClick={() => openSheet && openSheet('contact-edit', { student: stored, contact: null })}>
+          + Добавить контакт
+        </button>
+        <button className="btn" style={{flex:2, justifyContent:'center', cursor:'pointer'}} onClick={shareLink}>
+          <Icon name="share" size={14}/> Поделиться ссылкой
+        </button>
       </div>
-      <button className="btn" onClick={shareLink} style={{justifyContent:'center', cursor:'pointer'}}>
-        <Icon name="share" size={14}/> Поделиться ссылкой на карточку
-      </button>
     </div>
   );
 };
@@ -7810,6 +7855,7 @@ const App = () => {
       case 'renew-extra':   return <RenewExtraSubModal      {...common} {...props} />;
       case 'add-sub':       return <AddExtraSubModal        {...common} {...props} />;
       case 'add-individual':return <AddIndividualLessonModal {...common} {...props} />;
+      case 'contact-edit':  return <ContactEditModal        {...common} {...props} />;
       case 'alert':     return <AlertModal         {...common} {...props} />;
       case 'notif':     return <NotifSheet         {...common} {...props} />;
       case 'search':    return <SearchSheet        {...common} {...props} />;
