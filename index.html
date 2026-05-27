@@ -53,6 +53,7 @@ body {
   font-family: 'Manrope', system-ui, sans-serif;
   background: var(--paper);
   color: var(--ink);
+  overflow-x: hidden;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -570,7 +571,7 @@ body {
 .student-card .pack-pill.empty { background: var(--berry-pale); color: var(--berry); }
 
 /* Student profile */
-.profile { padding: 0; overflow: hidden; }
+.profile { padding: 0; overflow: hidden; min-width: 0; }
 .profile-head {
   padding: 28px 28px 22px;
   position: relative;
@@ -3617,6 +3618,7 @@ const ContactEditModal = ({ student, contact, onClose, notify }) => {
 const RenewModal = ({ student, onClose, notify }) => {
   const [packSize, setPackSize] = React.useState(8);
   const prices = { 4: 6400, 6: 9600, 8: 12800, 12: 19200 };
+  const [customPrice, setCustomPrice] = React.useState(prices[8]);
 
   // Есть ли ещё будущие уроки в текущем пакете?
   const futureLessons = (student.lessons || []).filter(l => l.status === 'future' || l.status === 'sick-wait');
@@ -3663,7 +3665,7 @@ const RenewModal = ({ student, onClose, notify }) => {
   const apply = () => {
     const stored = window.MK_STORE.getStudent(student.id);
     if (!stored) { notify('Ученик не найден', 'err'); return; }
-    const amount = prices[packSize];
+    const amount = customPrice;
     const todayHuman = new Date().toLocaleDateString('ru-RU');
     const eventType = payStatus === 'paid' ? 'payment' : 'payment-pending';
     const noteSuffix = payStatus === 'paid'
@@ -3741,11 +3743,15 @@ const RenewModal = ({ student, onClose, notify }) => {
         <label>Размер пакета</label>
         <div className="choices">
           {[4,6,8,12].map(n => (
-            <button key={n} className={`choice ${packSize === n ? 'on' : ''}`} onClick={() => setPackSize(n)}>
+            <button key={n} className={`choice ${packSize === n ? 'on' : ''}`} onClick={() => { setPackSize(n); setCustomPrice(prices[n]); }}>
               {n} уроков · {prices[n].toLocaleString('ru-RU')} ₽
             </button>
           ))}
         </div>
+      </div>
+      <div className="fld">
+        <label>Сумма к оплате ₽</label>
+        <input type="number" min="0" step="100" value={customPrice} onChange={e => setCustomPrice(parseInt(e.target.value) || 0)} />
       </div>
       <div className="fld">
         <label>{hasFuture ? 'Дата старта следующего пакета' : 'Дата активации (первый урок)'}</label>
@@ -3781,7 +3787,7 @@ const RenewModal = ({ student, onClose, notify }) => {
       </div>
       <div className="kv-row">
         <div className="k">К оплате</div>
-        <div className="v font-mono" style={{fontWeight:600, fontSize:15}}>{prices[packSize].toLocaleString('ru-RU')} ₽</div>
+        <div className="v font-mono" style={{fontWeight:600, fontSize:15}}>{customPrice.toLocaleString('ru-RU')} ₽</div>
       </div>
       <div className="kv-row">
         <div className="k">Последний урок нового пакета</div>
