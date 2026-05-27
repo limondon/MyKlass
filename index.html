@@ -90,7 +90,7 @@ body {
   display: flex; flex-direction: column;
   gap: 16px;
   z-index: 5;
-  overflow-y: auto;
+  overflow-y: auto; overflow-x: hidden;
 }
 .sidebar::before {
   content: ""; position: absolute; top: 0; right: -1px; bottom: 0; width: 1px;
@@ -523,7 +523,7 @@ body {
   color: var(--ink-faint); letter-spacing: 0.12em; text-transform: uppercase;
 }
 
-.students-list { flex: 1; overflow-y: auto; min-height: 0; }
+.students-list { flex: 1; overflow-y: auto; overflow-x: hidden; min-height: 0; }
 .student-card {
   display: grid;
   grid-template-columns: 6px 44px 1fr auto;
