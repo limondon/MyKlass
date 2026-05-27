@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>МойКласс · учительский ежедневник</title>
+<title>Читай-Считай · учительский ежедневник</title>
 <style>
 /* МойКласс — Учительский ежедневник */
 
@@ -6648,7 +6648,7 @@ const ParentBlock = ({ s, openSheet, notify }) => {
     };
     if (navigator.share) {
       try {
-        await navigator.share({ title: `МойКласс · ${s.name}`, text: `Карточка ученика «${s.name}»`, url });
+        await navigator.share({ title: `Читай-Считай · ${s.name}`, text: `Карточка ученика «${s.name}»`, url });
         notify && notify('Ссылка отправлена', 'ok'); return;
       } catch (err) { if (err?.name === 'AbortError') return; fallback(); return; }
     }
@@ -7528,7 +7528,7 @@ const ParentCardMk = ({ student: s, onClose, notify }) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `МойКласс · ${s.name}`,
+          title: `Читай-Считай · ${s.name}`,
           text: `Карточка ученика «${s.name}» — посмотрите остаток пакета и историю событий.`,
           url,
         });
@@ -7977,9 +7977,9 @@ const App = () => {
       <div className="app">
         <aside className="sidebar">
           <div className="brand">
-            <div className="brand-mark">M</div>
+            <div className="brand-mark">Ч</div>
             <div>
-              <div className="brand-name">Мой<em>Класс</em></div>
+              <div className="brand-name">Читай-<em>Считай</em></div>
               <div className="brand-sub">учительский ежедневник</div>
             </div>
           </div>
