@@ -3752,6 +3752,7 @@ const Students = ({ selectedId, setSelectedId }) => {
   const [q, setQ] = React.useState('');
   const [groupFilter, setGroupFilter] = React.useState('all');
   const [filterOpen, setFilterOpen] = React.useState(false);
+  const [mobileProfileOpen, setMobileProfileOpen] = React.useState(false);
   const { openSheet, notify } = useApp();
   const skillsStore = useSkillsStore();
   const groups = window.MK_STORE.groups;
@@ -3776,6 +3777,10 @@ const Students = ({ selectedId, setSelectedId }) => {
     return s.name.toLowerCase().includes(q.toLowerCase()) || gname.toLowerCase().includes(q.toLowerCase());
   });
   const sel = students.find(s => s.id === selectedId) || students[0];
+  const openStudent = (id) => {
+    setSelectedId(id);
+    setMobileProfileOpen(true);
+  };
 
   const activeGroup = groups.find(g => g.id === groupFilter);
   const activeColor = activeGroup ? activeGroup.color : 'var(--ink-faint)';
@@ -3790,12 +3795,12 @@ const Students = ({ selectedId, setSelectedId }) => {
 
   return (
     <div className="content">
-      <div className="students-shell">
+      <div className={`students-shell ${mobileProfileOpen ? 'mobile-profile-open' : ''}`}>
         {/* LIST */}
         <div className="card students-list-card">
           <div style={{padding:'10px 14px 0', display:'flex', gap:6}}>
             <button
-              onClick={() => openSheet('student-new', { onCreated: (id) => setSelectedId(id) })}
+              onClick={() => openSheet('student-new', { onCreated: openStudent })}
               className="btn btn-sm btn-primary"
               style={{width:'100%', justifyContent:'center'}}
             >
@@ -3892,7 +3897,7 @@ const Students = ({ selectedId, setSelectedId }) => {
                   key={s.id}
                   className={`student-card ${sel && sel.id === s.id ? 'active' : ''}`}
                   style={{ '--bookspine': s.spine }}
-                  onClick={() => setSelectedId(s.id)}
+                  onClick={() => openStudent(s.id)}
                 >
                   <div className="spine" />
                   <div className="av" style={{ color: s.spine }}>{Initials(s.name)}</div>
@@ -3919,6 +3924,7 @@ const Students = ({ selectedId, setSelectedId }) => {
             notify={notify}
             skillsStore={skillsStore}
             onStudentUpdate={() => setStudents([...window.MK_STORE.students])}
+            onBack={() => setMobileProfileOpen(false)}
           />
         ) : (
           <section className="card students-empty">
@@ -3938,7 +3944,7 @@ const Students = ({ selectedId, setSelectedId }) => {
               </p>
               <button
                 className="btn btn-primary"
-                onClick={() => openSheet('student-new', { onCreated: (id) => setSelectedId(id) })}
+                onClick={() => openSheet('student-new', { onCreated: openStudent })}
               >
                 <Icon name="plus" size={15}/> Добавить ученика
               </button>
@@ -3957,19 +3963,24 @@ const Students = ({ selectedId, setSelectedId }) => {
   );
 };
 
-const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentUpdate }) => {
+const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentUpdate, onBack }) => {
   const profileSub = getProfileSubscriptionView(s.id, 'main');
   const left = profileSub?.left ?? (s.lessons||[]).filter(l=>l.status==='future'||l.status==='sick-wait').length;
   const groupName = window.MK_STORE.getGroupName(s.groupId) || s.group || '—';
   const [tab, setTab] = React.useState('обзор');
   const [subjectId, setSubjectId] = React.useState('main');
   const extraSubs = (window.MK_STORE.getStudent(s.id) || s).extraSubs || [];
+  const [firstName, ...lastNameParts] = String(s.name || '').trim().split(/\s+/);
+  const lastName = lastNameParts.join(' ');
 
   React.useEffect(() => { setSubjectId('main'); }, [s.id]);
 
   return (
     <div className="profile card" style={{ '--bookspine': s.spine }}>
       <div className="profile-head">
+        <button className="profile-back" type="button" onClick={onBack}>
+          <Icon name="chevron" size={13}/> К списку
+        </button>
         <div className="lib-tag">
           формуляр ученика<br/>
           <span className="num">№ {s.id.replace('s','').padStart(3,'0')}</span>
@@ -3978,7 +3989,7 @@ const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentU
           <div className="profile-av">{Initials(s.name)}</div>
           <div>
             <div className="profile-name">
-              {s.name.split(' ')[0]} <em>{s.name.split(' ')[1]}</em>
+              <span>{firstName}</span>{lastName && <> <em>{lastName}</em></>}
             </div>
             <div className="profile-meta">
               {getAge(s) != null ? `${getAge(s)} лет` : ''}{s.birthDate ? ` (${s.birthDate.slice(0,5)})` : ''}{(getAge(s) != null || s.birthDate) ? ' · ' : ''}группа <b>{groupName}</b> · с <b>{s.joined||'2024'}</b>
@@ -3999,12 +4010,14 @@ const StudentProfile = ({ student: s, openSheet, notify, skillsStore, onStudentU
       )}
 
       <div className="profile-tabs">
-        {['обзор', 'занятия', 'оплата', 'заметки'].map(tn => (
-          <div key={tn} className={`tab ${tab === tn ? 'active' : ''}`} onClick={() => setTab(tn)}>
-            {tn.charAt(0).toUpperCase() + tn.slice(1)}
-          </div>
-        ))}
-        <div style={{marginLeft:'auto', display:'flex', gap:8, padding:'4px 0'}}>
+        <div className="profile-tab-list">
+          {['обзор', 'занятия', 'оплата', 'заметки'].map(tn => (
+            <button key={tn} type="button" className={`tab ${tab === tn ? 'active' : ''}`} onClick={() => setTab(tn)}>
+              {tn.charAt(0).toUpperCase() + tn.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="profile-actions">
           <button
             className="btn btn-sm"
             onClick={() => {
@@ -4474,7 +4487,7 @@ const LessonsPane = ({ s, openSheet, activeSubId }) => {
         {(sub.lessons||[]).map((l,i) => <LessonDotMk key={i} lesson={l} idx={i} onOpen={setPicker}/>)}
       </div>
 
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:20}}>
+      <div className="lesson-stats">
         {[['Осталось',left,left<=0?'var(--berry)':left<=2?'var(--ochre-deep)':'var(--ink)'],['Проведено',done,'var(--forest)'],['Всего',sub.totalSessions ?? sub.pack,'var(--ink-faint)']].map(([l,v,c])=>(
           <div key={l} style={{background:'var(--paper-deep)',borderRadius:10,padding:'12px 14px'}}>
             <div style={{fontFamily:'JetBrains Mono',fontSize:10,letterSpacing:'.12em',textTransform:'uppercase',color:'var(--ink-faint)',marginBottom:4}}>{l}</div>
@@ -4484,7 +4497,7 @@ const LessonsPane = ({ s, openSheet, activeSubId }) => {
       </div>
 
       {sub.queuedPack && (
-        <div style={{marginTop:14, padding:'10px 14px', background:'var(--sky-pale)', borderRadius:8, border:'1px solid var(--sky)', display:'flex', alignItems:'center', gap:10, fontSize:13}}>
+        <div className="profile-queued">
           <span style={{flex:1}}>
             📦 В очереди: <strong>{sub.queuedPack.packSize} уроков</strong> · старт с {sub.queuedPack.startDate.split('-').reverse().slice(0,2).join('.')}
             {sub.queuedPack.paid ? ' · оплачено' : ' · ждёт оплаты'}
@@ -4502,7 +4515,7 @@ const LessonsPane = ({ s, openSheet, activeSubId }) => {
         <h3>Заморозка <em>абонемента</em></h3>
         <span className="tag">использовано {mainSub.freezeUsed||0} из {mainSub.freezeMax||3} нед.</span>
       </div>
-      <div style={{display:'flex',alignItems:'center',gap:10,background:'var(--sky-pale)',borderRadius:10,border:'1px solid oklch(0.82 0.06 225)',padding:'10px 14px',marginBottom:12}}>
+      <div className="freeze-summary">
         <span style={{fontFamily:'JetBrains Mono',fontSize:12,color:'oklch(0.42 0.08 230)',flex:1}}>Недель заморозки: {mainSub.freezeUsed||0} / {mainSub.freezeMax||3}</span>
         <div style={{display:'flex',gap:5}}>
           {Array.from({length:mainSub.freezeMax||3},(_,i)=>(
@@ -4641,7 +4654,7 @@ const PaymentsPane = ({ s, left, openSheet, notify, activeSubId }) => {
   };
 
   return (
-  <div style={{gridColumn:'1/-1', display:'flex', flexWrap:'wrap', gap:28, alignItems:'flex-start'}}>
+  <div className="payments-layout">
     <div className="profile-section" style={{flex:'0 0 300px', minWidth:0}}>
       <div className="section-h">
         <h3>Текущий <em>пакет</em></h3>
@@ -5103,13 +5116,13 @@ const ParentBlock = ({ s, openSheet, notify }) => {
   return (
     <div style={{display:'flex', flexDirection:'column', gap:10}}>
       {contacts.map(ct => (
-        <div key={ct.id} style={{display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'var(--paper-deep)', borderRadius:10}}>
+        <div key={ct.id} className="contact-row">
           <div style={{width:36, height:36, borderRadius:'50%', background:'var(--ochre-pale)', color:'var(--ochre-deep)', display:'grid', placeItems:'center', fontFamily:'Instrument Serif', fontStyle:'italic', fontSize:16, flexShrink:0}}>{Initials(ct.name)}</div>
           <div style={{flex:1, minWidth:0}}>
             <div style={{fontWeight:600, fontSize:13.5}}>{ct.name}{ct.role ? <span style={{fontWeight:400, fontSize:11, color:'var(--ink-faint)', marginLeft:6}}>{ct.role}</span> : null}</div>
             <div style={{fontFamily:'JetBrains Mono', fontSize:11, color:'var(--ink-faint)', letterSpacing:'.08em'}}>{ct.phone || '—'}</div>
           </div>
-          <div style={{display:'flex', gap:4}}>
+          <div className="contact-row-actions">
             <button className="icon-btn" onClick={() => openSheet && openSheet('contact-edit', { student: stored, contact: ct })} aria-label="Изменить"><Icon name="edit" size={13}/></button>
             <button className="icon-btn" onClick={() => openSheet && openSheet('contact', { student: stored, contact: ct })} aria-label="Связь"><Icon name="phone" size={14}/></button>
             {contacts.length > 1 && (
@@ -5118,7 +5131,7 @@ const ParentBlock = ({ s, openSheet, notify }) => {
           </div>
         </div>
       ))}
-      <div style={{display:'flex', gap:8}}>
+      <div className="contact-footer-actions">
         <button className="btn btn-sm" style={{flex:1, justifyContent:'center'}} onClick={() => openSheet && openSheet('contact-edit', { student: stored, contact: null })}>
           + Добавить контакт
         </button>
@@ -6579,7 +6592,7 @@ const App = () => {
             {navItems.map(n => (
               <div
                 key={n.id}
-                className={`nav-item ${route === n.id ? 'active' : ''}`}
+                className={`nav-item nav-core ${route === n.id ? 'active' : ''}`}
                 onClick={() => setRoute(n.id)}
                 data-screen-label={`${n.label}`}
               >
@@ -6590,16 +6603,16 @@ const App = () => {
             ))}
 
             <div className="nav-section">Делиться</div>
-            <div className="nav-item" onClick={() => openSheet('parent-pick')} style={{cursor:'pointer'}}>
+            <div className="nav-item nav-secondary" onClick={() => openSheet('parent-pick')} style={{cursor:'pointer'}}>
               <Icon name="parent" />
               <span className="label">Карточка родителя</span>
             </div>
 
             <div className="nav-section">Прочее</div>
-            <div className="nav-item" onClick={() => openSheet('archive')}>
+            <div className="nav-item nav-secondary" onClick={() => openSheet('archive')}>
               <Icon name="archive" /><span className="label">Архив пакетов</span>
             </div>
-            <div className="nav-item" onClick={() => openSheet('settings')}>
+            <div className="nav-item nav-settings" onClick={() => openSheet('settings')}>
               <Icon name="settings" /><span className="label">Настройки</span>
             </div>
           </div>

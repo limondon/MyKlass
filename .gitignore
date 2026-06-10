@@ -7,3 +7,4 @@ dist/
 backups/
 .claude/
 database.rules.json
+.gstack/
