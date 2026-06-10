@@ -1,0 +1,18 @@
+{
+  "rules": {
+    "workspaces": {
+      "default": {
+        ".read": "auth != null && auth.token.email_verified == true && (auth.token.email == 'teacher@example.com' || auth.token.email == 'developer@example.com')",
+        ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'teacher@example.com' || auth.token.email == 'developer@example.com')",
+        ".validate": "newData.child('initialized').val() == true && newData.hasChildren(['groups', 'teacherProfile'])"
+      }
+    },
+    "publicCards": {
+      "$token": {
+        ".read": true,
+        ".write": "auth != null && auth.token.email_verified == true && (auth.token.email == 'teacher@example.com' || auth.token.email == 'developer@example.com')",
+        ".validate": "newData.hasChildren(['version', 'updatedAt', 'student', 'subscription']) && newData.child('version').val() == 1 && newData.child('student').hasChildren(['name', 'spine']) && newData.child('subscription').hasChildren(['totalSessions', 'remaining', 'freezeMax', 'lessons'])"
+      }
+    }
+  }
+}
