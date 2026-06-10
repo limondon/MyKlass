@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.vite/
+.env.local
+.env.*.local
+.firebase/
+backups/
+.claude/
+database.rules.json

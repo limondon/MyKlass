@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <circle cx="32" cy="32" r="29" fill="#16482f"/>
+  <circle cx="32" cy="32" r="27.5" fill="none" stroke="#e8d6aa" stroke-width="1.5"/>
+  <text
+    x="32"
+    y="43"
+    fill="#fff8e9"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="35"
+    font-style="italic"
+    text-anchor="middle"
+  >Е</text>
+</svg>
